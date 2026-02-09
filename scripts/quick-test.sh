@@ -13,8 +13,8 @@ set -euo pipefail
 APP_URL="http://localhost:8080"
 TEMPORAL_UI_URL="http://localhost:30080"
 
-# Generate unique event ID
-EVENT_ID=$(uuidgen 2>/dev/null || echo "test-$(date +%s)")
+# Generate unique event ID (lowercase to match Java UUID.toString() used by Temporal workflow IDs)
+EVENT_ID=$(uuidgen 2>/dev/null | tr '[:upper:]' '[:lower:]' || echo "test-$(date +%s)")
 
 echo "🚀 Quick Test: Submitting notification event..."
 echo "   Event ID: ${EVENT_ID}"

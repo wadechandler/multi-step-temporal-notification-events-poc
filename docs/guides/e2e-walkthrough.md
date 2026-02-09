@@ -52,7 +52,7 @@ The other services are already exposed via NodePort:
 # Set environment variables
 export KAFKA_BOOTSTRAP_SERVERS=localhost:30092
 export TEMPORAL_ADDRESS=localhost:7233
-export BUSINESS_DB_PASSWORD=app
+export BUSINESS_DB_PASSWORD=$(kubectl get secret business-db-app -n default -o jsonpath='{.data.password}' | base64 -d)
 
 # Run the application
 ./gradlew :app:bootRun
@@ -234,7 +234,7 @@ In Temporal UI, observe that both contacts are processed in parallel (timeline s
 ### Contact Creation Failing
 - Check `contact-commands` topic has messages
 - Check `ContactCommandHandler` logs for errors
-- Verify database connection: `kubectl exec -it -n default business-db-1 -- psql -U app -d business`
+- Verify database connection: `kubectl exec -it -n default business-db-1 -c postgres -- psql -U postgres -d business`
 
 ### Polling Taking Too Long
 - Check `contact-events` topic - is `ContactCreated` being published?

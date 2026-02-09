@@ -197,6 +197,8 @@ spec:
           brokers:
             - broker: 0
               advertisedHost: localhost
+              advertisedPort: 30093
+              nodePort: 30093
     config:
       offsets.topic.replication.factor: 1
       transaction.state.log.replication.factor: 1

@@ -7,6 +7,7 @@
 #   - 30432: PostgreSQL (CNPG or Yugabyte) - for DataGrip
 #   - 30433: Temporal DB (if separate access needed)
 #   - 30092: Kafka bootstrap (for local Kafka tooling)
+#   - 30093: Kafka broker (per-broker NodePort for external listener)
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 name: notification-poc
@@ -38,6 +39,10 @@ nodes:
       # Kafka bootstrap
       - containerPort: 30092
         hostPort: 30092
+        protocol: TCP
+      # Kafka broker (per-broker NodePort for external listener)
+      - containerPort: 30093
+        hostPort: 30093
         protocol: TCP
   - role: worker
     labels:

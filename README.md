@@ -34,55 +34,95 @@ See [AGENTS.md](AGENTS.md) for the full architecture diagram and implementation 
 
 ## Quick Start
 
+Clone the repo, `cd` into it, and run three commands:
+
 ```bash
-# 1. Install correct Java and Gradle versions
+cd multi-step-temporal-notification-events-poc
+
+# 1. Install correct Java and Gradle versions (requires SDKMAN, reads .sdkmanrc)
 sdk env install
 
-# 2. Build the application
-./gradlew :app:build
+# 2. Stand up infrastructure: KIND cluster, Kafka, Temporal, PostgreSQL, Grafana (~5 min)
+./infra/scripts/setup.sh
 
-# 3. Stand up the infrastructure (KIND + all services)
-./infra/scripts/setup.sh            # Default: CNPG
-# OR
-./infra/scripts/setup.sh --db yugabyte  # Use YugabyteDB instead
-
-# 4. Access points (after setup completes)
-#    Temporal UI:  http://localhost:30080
-#    Grafana:      http://localhost:30081 (admin/admin)
-#    Business DB:  localhost:30432 (DataGrip)
-#    Kafka:        localhost:30092
-
-# 5. Tear down
-./infra/scripts/teardown.sh
+# 3. Run the full end-to-end test (starts the app, submits events, verifies workflows)
+./scripts/e2e-test.sh
 ```
+
+That's it. After step 3 completes, the app is running and you can:
+
+- **Browse workflows:** http://localhost:30080 (Temporal UI)
+- **View metrics:** http://localhost:30081 (Grafana, admin/admin)
+- **Run a quick smoke test:** `./scripts/quick-test.sh`
+- **Query the database:** `kubectl exec -n default business-db-1 -c postgres -- psql -U postgres -d business`
+
+### Running the App Manually
+
+If you already have infrastructure up and want to start the app yourself:
+
+```bash
+./scripts/port-forward.sh --background  # Temporal gRPC (one-time)
+
+export KAFKA_BOOTSTRAP_SERVERS=localhost:30092
+export TEMPORAL_ADDRESS=localhost:7233
+export BUSINESS_DB_PASSWORD=$(kubectl get secret business-db-app -n default \
+    -o jsonpath='{.data.password}' | base64 -d)
+
+./gradlew :app:bootRun
+```
+
+### Tearing Down
+
+```bash
+./infra/scripts/teardown.sh   # Destroys the entire KIND cluster
+```
+
+### Access Points
+
+| Service         | URL / Address          | Notes                          |
+|-----------------|------------------------|--------------------------------|
+| Temporal UI     | http://localhost:30080  | Workflow visibility            |
+| Grafana         | http://localhost:30081  | Metrics (admin/admin)          |
+| Business DB     | localhost:30432         | PostgreSQL (user: `app`, db: `business`) |
+| Temporal DB     | localhost:30433         | PostgreSQL (user: `temporal`)  |
+| Kafka Bootstrap | localhost:30092         | Client bootstrap address       |
+| App Health      | http://localhost:8080/actuator/health | Spring Boot health endpoint |
+
+See [scripts/README.md](scripts/README.md) for script flags, troubleshooting, and details.
 
 ## Project Structure
 
 ```
 .
-├── .cursor/rules/          # Cursor AI context rules
-│   ├── 00-project-standards.mdc
-│   ├── 10-infra.mdc
-│   └── 20-temporal-workflows.mdc
-├── infra/
-│   ├── kind-config.yaml    # 3-node KIND cluster
-│   ├── helm/               # Helm value overrides
-│   └── scripts/
-│       ├── setup.sh        # One-click infrastructure bootstrap
-│       └── teardown.sh     # Cluster cleanup
-├── app/
-│   ├── build.gradle        # Spring Boot 4 + Temporal SDK
+├── app/                        # Spring Boot application
+│   ├── build.gradle            # Spring Boot 4 + Temporal SDK + Kafka
 │   ├── Dockerfile
-│   └── src/
-│       └── main/
-│           ├── java/com/wadechandler/notification/poc/
-│           └── resources/
-│               ├── application.yml
-│               └── db/migration/   # Flyway scripts
-├── AGENTS.md               # Architecture roadmap & phase guide
-├── build.gradle            # Root Gradle build
-├── settings.gradle
-└── .sdkmanrc               # Java 25 + Gradle 8.14 pinned
+│   └── src/main/
+│       ├── java/com/wadechandler/notification/poc/
+│       │   ├── controller/     # REST APIs (events, contacts, messages)
+│       │   ├── command/        # Kafka command handlers (CQRS write side)
+│       │   ├── workflow/       # Temporal workflow + activities
+│       │   └── model/          # Domain entities + DTOs
+│       └── resources/
+│           ├── application.yml
+│           └── db/migration/   # Flyway schemas
+├── infra/
+│   ├── kind-config.yaml        # KIND cluster + port mappings
+│   └── scripts/
+│       ├── setup.sh            # Full infrastructure bootstrap
+│       └── teardown.sh         # Cluster cleanup
+├── scripts/
+│   ├── e2e-test.sh             # Full end-to-end test suite
+│   ├── quick-test.sh           # Quick smoke test
+│   ├── port-forward.sh         # Temporal gRPC port-forward helper
+│   └── README.md               # Script details & troubleshooting
+├── docs/
+│   ├── api/                    # HTTP client files (events, contacts, messages)
+│   ├── guides/                 # Walkthroughs (e2e-walkthrough.md)
+│   └── tasks/                  # Task documents (01-09)
+├── AGENTS.md                   # Architecture roadmap & AI agent instructions
+├── .sdkmanrc                   # Java 25 + Gradle 8.14 pinned
+└── .cursor/rules/              # Cursor AI context rules
 ```
 
 ## Tech Stack

@@ -219,7 +219,19 @@ else
 
     export KAFKA_BOOTSTRAP_SERVERS="${KAFKA_BOOTSTRAP}"
     export TEMPORAL_ADDRESS="${TEMPORAL_GRPC}"
-    export BUSINESS_DB_PASSWORD="${BUSINESS_DB_PASSWORD:-app}"
+
+    # Extract CNPG-generated password from K8s secret (falls back to env var or 'app')
+    if [[ -z "${BUSINESS_DB_PASSWORD:-}" ]]; then
+        BUSINESS_DB_PASSWORD=$(kubectl get secret business-db-app -n default \
+            -o jsonpath='{.data.password}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
+        if [[ -z "${BUSINESS_DB_PASSWORD}" ]]; then
+            warn "Could not extract DB password from CNPG secret; falling back to 'app'"
+            BUSINESS_DB_PASSWORD="app"
+        else
+            info "Extracted DB password from CNPG secret"
+        fi
+    fi
+    export BUSINESS_DB_PASSWORD
 
     cd "${PROJECT_DIR}"
     info "Starting application with: ./gradlew :app:bootRun"
@@ -241,9 +253,9 @@ fi
 # =============================================================================
 section "Step 5: Submit Test Events"
 
-# Generate unique event IDs
-EVENT_ID_1=$(uuidgen 2>/dev/null || python3 -c 'import uuid; print(uuid.uuid4())' 2>/dev/null || echo "e2e-test-$(date +%s)-1")
-EVENT_ID_2=$(uuidgen 2>/dev/null || python3 -c 'import uuid; print(uuid.uuid4())' 2>/dev/null || echo "e2e-test-$(date +%s)-2")
+# Generate unique event IDs (lowercase to match Java UUID.toString() used by Temporal workflow IDs)
+EVENT_ID_1=$(uuidgen 2>/dev/null | tr '[:upper:]' '[:lower:]' || python3 -c 'import uuid; print(uuid.uuid4())' 2>/dev/null || echo "e2e-test-$(date +%s)-1")
+EVENT_ID_2=$(uuidgen 2>/dev/null | tr '[:upper:]' '[:lower:]' || python3 -c 'import uuid; print(uuid.uuid4())' 2>/dev/null || echo "e2e-test-$(date +%s)-2")
 
 # Test 1: Single contact
 info "Test 1: Submit event with single contact"
@@ -334,10 +346,10 @@ if curl -sf "${TEMPORAL_UI_URL}/api/v1/namespaces/${NAMESPACE}/workflows" &>/dev
     for _ in $(seq 1 25); do
         WORKFLOWS=$(curl -sf "${TEMPORAL_UI_URL}/api/v1/namespaces/${NAMESPACE}/workflows" 2>/dev/null || echo "")
 
-        if echo "${WORKFLOWS}" | grep -q "${WORKFLOW_ID_1}" 2>/dev/null; then
+        if echo "${WORKFLOWS}" | grep -qi "${WORKFLOW_ID_1}" 2>/dev/null; then
             FOUND_1=true
         fi
-        if echo "${WORKFLOWS}" | grep -q "${WORKFLOW_ID_2}" 2>/dev/null; then
+        if echo "${WORKFLOWS}" | grep -qi "${WORKFLOW_ID_2}" 2>/dev/null; then
             FOUND_2=true
         fi
 
@@ -379,7 +391,7 @@ if [[ -n "${DB_POD}" ]]; then
     info "Waiting for eventual consistency, then querying database..."
     sleep 5
 
-    CONTACTS=$(kubectl exec -n default "${DB_POD}" -- psql -U app -d business -t -c \
+    CONTACTS=$(kubectl exec -n default "${DB_POD}" -c postgres -- psql -U postgres -d business -t -c \
         "SELECT COUNT(*) FROM contacts WHERE external_id_value LIKE 'e2e-test-patient-%';" 2>/dev/null | tr -d ' ' || echo "0")
 
     if [[ "${CONTACTS}" -gt 0 ]]; then
@@ -388,7 +400,7 @@ if [[ -n "${DB_POD}" ]]; then
         warn "No test contacts found yet (eventual consistency delay or workflow still running)"
     fi
 
-    MESSAGES=$(kubectl exec -n default "${DB_POD}" -- psql -U app -d business -t -c \
+    MESSAGES=$(kubectl exec -n default "${DB_POD}" -c postgres -- psql -U postgres -d business -t -c \
         "SELECT COUNT(*) FROM messages WHERE template_id = 'rx-notification-v1';" 2>/dev/null | tr -d ' ' || echo "0")
 
     if [[ "${MESSAGES}" -gt 0 ]]; then
@@ -437,7 +449,7 @@ echo ""
 info "Next Steps:"
 echo "  1. View workflows in Temporal UI: ${TEMPORAL_UI_URL}/namespaces/${NAMESPACE}/workflows"
 echo "  2. Check application logs: tail -f /tmp/app.log"
-echo "  3. Query database: kubectl exec -n default ${DB_POD:-business-db-1} -- psql -U app -d business"
+echo "  3. Query database: kubectl exec -n default ${DB_POD:-business-db-1} -c postgres -- psql -U postgres -d business"
 echo "  4. Re-run database check after workflows complete"
 echo ""
 
