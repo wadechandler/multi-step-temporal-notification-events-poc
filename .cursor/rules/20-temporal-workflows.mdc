@@ -9,24 +9,27 @@ globs: app/src/**/*.java
 - Name: `NOTIFICATION_QUEUE`
 
 ## Workflow: NotificationWorkflow
-Entry point for processing a single notification event. Receives an ExternalEvent.
+Entry point for processing a single notification event. Receives typed input:
+`processNotification(UUID eventId, String eventType, NotificationPayload payload)`
+
+The Kafka consumer (`NotificationEventConsumer`) handles event-type routing and payload parsing
+before starting the workflow. The workflow receives pre-parsed, typed data — it never touches
+raw JSON or untyped maps.
 
 ### Steps (Saga):
-1. **Parse Event:** Extract contact external IDs and message template info from the event payload.
-2. **For Each Contact** (may be 1 or more per event):
-   a. **GetContact(externalId):** Activity that calls `GET /contacts?externalIdType={type}&externalIdValue={value}`.
-      - If `200 OK`: Contact exists, proceed.
-      - If `404 Not Found`: Contact does not exist, go to step b.
-   b. **CreateContact(contactData):** Activity that calls `POST /contacts`.
-      - Expects `202 Accepted` (async creation).
-      - Then enters a **Polling Loop**: Call GetContact with exponential backoff via Activity RetryOptions until `200 OK`.
-   c. **CreateMessage(contactId, templateData):** Activity that calls `POST /messages`.
+1. **For Each Contact** in `payload.contacts()` (may be 1 or more per event):
+   a. **GetContact(externalIdType, externalIdValue):** Activity that calls `GET /contacts?externalIdType={type}&externalIdValue={value}`.
+      - Returns `Optional<ContactResult>`. A 404 returns `Optional.empty()` — this is a normal result, not an error.
+   b. **If empty (contact not found):**
+      - **CreateContact(contactData):** Activity that calls `POST /contacts`. Expects `202 Accepted`.
+      - **PollForContact(externalIdType, externalIdValue):** Same HTTP call, but this activity stub is configured with aggressive RetryOptions. Throws `ContactNotFoundException` on 404 (retryable), returns `ContactResult` on success.
+   c. **CreateMessage(contactId, templateId, eventType):** Activity that calls `POST /messages`.
       - Expects `202 Accepted`.
 
 ### Temporal Patterns to Use:
-- **Activity RetryOptions:** For the polling pattern. Set `initialInterval`, `backoffCoefficient`, `maximumAttempts`.
+- **Activity RetryOptions on stubs:** Retry options are configured on the **ActivityStub** in the workflow, NOT in the activity implementation. Use different stubs for different retry policies (standard vs polling).
+- **`Async.function()` + `Promise.allOf()`:** For parallel contact processing. Do NOT use child workflows for this POC.
 - **Workflow.sleep():** If you need durable wait between saga steps (NOT Thread.sleep).
-- **Child Workflows:** Consider if per-contact processing should be a child workflow for isolation.
 - **Saga Compensation:** If message creation fails after contact was created, log it (no rollback needed for this POC, but structure the code to allow it).
 
 ### Activity Implementation:

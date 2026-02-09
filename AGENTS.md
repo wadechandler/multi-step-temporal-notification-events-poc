@@ -108,8 +108,10 @@ Tasks:
    - `POST /messages` — Publishes `MessageCreateRequested` to Kafka, returns `202 Accepted`.
    - Kafka consumer: Listens on `message-commands`, writes to DB, publishes `MessageCreated`.
 3. **External Events API:**
-   - `POST /events` — Accepts an external event, publishes to `notification-events` Kafka topic.
+   - `POST /events` — Accepts an external event, validates `eventType` is present, publishes to `notification-events` Kafka topic with `X-Event-Type` Kafka header.
    - Event schema: `{ eventId, eventType, payload: { contacts: [...], templateId, ... } }`
+   - `eventType` is first-class metadata: it drives downstream routing (which workflow processes the event) and, in production, would drive JSON Schema validation of the payload.
+   - Typed payload DTOs (e.g., `NotificationPayload`, `ContactInfo`) represent the parsed shape of specific event types for use by the workflow layer.
 
 ### Phase 4: Temporal Workflow Implementation
 **Goal:** The durable saga logic.
@@ -117,14 +119,14 @@ Tasks:
 Tasks:
 1. **Activities Interface:** `ContactActivities` (getContact, createContact, pollForContact), `MessageActivities` (createMessage).
 2. **Activity Implementations:** HTTP calls to the mock services using Spring's RestClient.
-3. **Workflow Interface:** `NotificationWorkflow` with `@WorkflowMethod processNotification(ExternalEvent)`.
+3. **Workflow Interface:** `NotificationWorkflow` with `@WorkflowMethod processNotification(UUID eventId, String eventType, NotificationPayload payload)`.
 4. **Workflow Implementation:**
-   - For each contact in the event:
-     - Try getContact by externalId.
+   - For each contact in the payload (already typed, parsed by the consumer):
+     - Try getContact by externalId (returns `Optional<ContactResult>`; 404 is empty, not an error).
      - If not found: createContact (gets 202), then pollForContact using Activity RetryOptions with backoff.
      - Once contact resolved: createMessage for that contact.
-   - Use child workflows or async activities for parallel contact processing.
-5. **Workflow Starter:** Kafka consumer on `notification-events` that creates and starts workflow instances.
+   - Use `Async.function()` + `Promise.allOf()` for parallel contact processing.
+5. **Workflow Starter:** Kafka consumer on `notification-events` that reads `eventType` to determine which workflow to invoke, parses the payload into a typed DTO, and starts the workflow.
 
 ### Phase 5: Testing & Load Simulation
 **Goal:** Validate the architecture.

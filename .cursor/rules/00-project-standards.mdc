@@ -36,8 +36,8 @@ The system strictly separates Commands (writes via Kafka events) from Queries (r
 
 ### Temporal's Role (Saga Orchestrator):
 - Temporal does NOT own the data. It orchestrates the multi-step workflow.
-- A Kafka consumer reads from the `notification-events` topic and starts a Temporal Workflow for each event.
-- The Workflow coordinates: Contact Lookup -> Contact Creation (if needed) -> Poll for Consistency -> Message Creation.
+- A Kafka consumer reads from the `notification-events` topic, inspects `eventType` (via Kafka header or message body) to determine which workflow to invoke, parses the payload into a typed DTO, and starts the appropriate Temporal Workflow.
+- For `RxOrderNotification` events: the Workflow coordinates Contact Lookup -> Contact Creation (if needed) -> Poll for Consistency -> Message Creation.
 
 ## 4. Database Strategy (Toggleable)
 Support two persistence modes. In a given deployment, Temporal and the App share the same DB technology:
