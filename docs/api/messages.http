@@ -1,0 +1,31 @@
+### Messages API
+### Base URL: http://localhost:8080
+
+### Create a message directly (CQRS command - returns 202 Accepted)
+### Note: Replace {contactId} with an actual contact UUID from the contacts API
+POST http://localhost:8080/messages
+Content-Type: application/json
+
+{
+  "contactId": "550e8400-e29b-41d4-a716-446655440010",
+  "templateId": "rx-notification-v1",
+  "channel": "EMAIL",
+  "content": "Your prescription order is ready for pickup. Please visit your pharmacy."
+}
+
+### Lookup message by ID (replace {id} with actual UUID from previous response or DB)
+GET http://localhost:8080/messages/550e8400-e29b-41d4-a716-446655440020
+
+### Create message for testing (use a contact ID from contacts API)
+POST http://localhost:8080/messages
+Content-Type: application/json
+
+{
+  "contactId": "550e8400-e29b-41d4-a716-446655440010",
+  "templateId": "rx-notification-v1",
+  "channel": "SMS",
+  "content": "Test message: Your prescription is ready."
+}
+
+### Query the message created above (wait a few seconds after POST for eventual consistency)
+GET http://localhost:8080/messages/550e8400-e29b-41d4-a716-446655440020

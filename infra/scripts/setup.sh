@@ -152,7 +152,7 @@ wait_for_crd kafkatopics.kafka.strimzi.io 120
 # Apply Kafka cluster manifest (KRaft mode, single combined node for local dev)
 info "Applying Kafka cluster manifest (single node)..."
 kubectl apply -n kafka -f - <<'KAFKA_EOF'
-apiVersion: kafka.strimzi.io/v1beta2
+apiVersion: kafka.strimzi.io/v1
 kind: KafkaNodePool
 metadata:
   name: combined
@@ -171,7 +171,7 @@ spec:
         size: 5Gi
         deleteClaim: true
 ---
-apiVersion: kafka.strimzi.io/v1beta2
+apiVersion: kafka.strimzi.io/v1
 kind: Kafka
 metadata:
   name: poc-kafka
@@ -194,6 +194,9 @@ spec:
         configuration:
           bootstrap:
             nodePort: 30092
+          brokers:
+            - broker: 0
+              advertisedHost: localhost
     config:
       offsets.topic.replication.factor: 1
       transaction.state.log.replication.factor: 1
@@ -214,7 +217,7 @@ kubectl wait kafka/poc-kafka --for=condition=Ready --timeout=300s -n kafka || {
 info "Creating Kafka topics..."
 for TOPIC in notification-events contact-commands contact-events message-commands message-events; do
     kubectl apply -n kafka -f - <<TOPIC_EOF
-apiVersion: kafka.strimzi.io/v1beta2
+apiVersion: kafka.strimzi.io/v1
 kind: KafkaTopic
 metadata:
   name: ${TOPIC}

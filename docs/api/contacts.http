@@ -1,0 +1,36 @@
+### Contacts API
+### Base URL: http://localhost:8080
+
+### Create a contact directly (CQRS command - returns 202 Accepted)
+POST http://localhost:8080/contacts
+Content-Type: application/json
+
+{
+  "externalIdType": "patientId",
+  "externalIdValue": "patient-direct-001",
+  "email": "direct@example.com",
+  "phone": "+1-555-1001"
+}
+
+### Lookup contact by ID (replace {id} with actual UUID from previous response or DB)
+GET http://localhost:8080/contacts/550e8400-e29b-41d4-a716-446655440010
+
+### Lookup contact by external ID (patientId)
+GET http://localhost:8080/contacts?externalIdType=patientId&externalIdValue=patient-12345
+
+### Lookup contact by external ID (non-existent - returns 404)
+GET http://localhost:8080/contacts?externalIdType=patientId&externalIdValue=non-existent-999
+
+### Create contact for testing (then query it)
+POST http://localhost:8080/contacts
+Content-Type: application/json
+
+{
+  "externalIdType": "patientId",
+  "externalIdValue": "test-patient-001",
+  "email": "test@example.com",
+  "phone": "+1-555-2001"
+}
+
+### Query the contact created above (wait a few seconds after POST for eventual consistency)
+GET http://localhost:8080/contacts?externalIdType=patientId&externalIdValue=test-patient-001

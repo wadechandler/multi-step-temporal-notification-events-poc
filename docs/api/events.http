@@ -1,0 +1,68 @@
+### Notification Events API
+### Base URL: http://localhost:8080
+
+### Submit notification event with 1 contact
+POST http://localhost:8080/events
+Content-Type: application/json
+
+{
+  "eventId": "550e8400-e29b-41d4-a716-446655440000",
+  "eventType": "RxOrderNotification",
+  "payload": {
+    "contacts": [
+      {
+        "externalIdType": "patientId",
+        "externalIdValue": "patient-12345",
+        "email": "patient1@example.com",
+        "phone": "+1-555-0100"
+      }
+    ],
+    "templateId": "rx-notification-v1"
+  }
+}
+
+### Submit notification event with 2 contacts
+POST http://localhost:8080/events
+Content-Type: application/json
+
+{
+  "eventId": "550e8400-e29b-41d4-a716-446655440001",
+  "eventType": "RxOrderNotification",
+  "payload": {
+    "contacts": [
+      {
+        "externalIdType": "patientId",
+        "externalIdValue": "patient-12345",
+        "email": "patient1@example.com",
+        "phone": "+1-555-0100"
+      },
+      {
+        "externalIdType": "patientId",
+        "externalIdValue": "patient-67890",
+        "email": "patient2@example.com",
+        "phone": "+1-555-0200"
+      }
+    ],
+    "templateId": "rx-notification-v1"
+  }
+}
+
+### Submit notification event with non-existent contact (will trigger creation)
+POST http://localhost:8080/events
+Content-Type: application/json
+
+{
+  "eventId": "550e8400-e29b-41d4-a716-446655440002",
+  "eventType": "RxOrderNotification",
+  "payload": {
+    "contacts": [
+      {
+        "externalIdType": "patientId",
+        "externalIdValue": "new-patient-99999",
+        "email": "newpatient@example.com",
+        "phone": "+1-555-9999"
+      }
+    ],
+    "templateId": "rx-notification-v1"
+  }
+}

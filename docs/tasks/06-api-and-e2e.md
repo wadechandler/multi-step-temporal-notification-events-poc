@@ -38,12 +38,18 @@ Step-by-step guide:
 6. Query the database for created contacts and messages
 7. Verify the full flow completed
 
-### 3. Load Test Sketch (Optional)
+### 3. Automated Test Scripts (`scripts/`)
+- `e2e-test.sh` — Full end-to-end test script that verifies infrastructure, starts app, submits events, and verifies workflows
+- `quick-test.sh` — Simple script to submit a single test event quickly
+- See `scripts/README.md` for usage
+
+### 4. Load Test Sketch (Optional)
 A simple script or Spring test that submits N events to Kafka for basic throughput testing.
 
 ## Acceptance Criteria
 - A new team member can follow the e2e guide and see the full flow work
 - API collection files are valid and tested
+- Automated test scripts (`e2e-test.sh`, `quick-test.sh`) can run successfully
 - Temporal UI shows completed workflow executions
 
 ## Prompt (for Builder sub-agent)
