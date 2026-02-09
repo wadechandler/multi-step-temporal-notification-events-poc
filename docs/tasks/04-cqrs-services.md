@@ -35,7 +35,7 @@ This is the exact behavior the Temporal workflow must handle.
 }
 ```
 
-**Message (PCM):**
+**Message:**
 ```json
 {
   "id": "uuid",

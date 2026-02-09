@@ -20,7 +20,7 @@ Entry point for processing a single notification event. Receives an ExternalEven
    b. **CreateContact(contactData):** Activity that calls `POST /contacts`.
       - Expects `202 Accepted` (async creation).
       - Then enters a **Polling Loop**: Call GetContact with exponential backoff via Activity RetryOptions until `200 OK`.
-   c. **CreateMessage(contactId, templateData):** Activity that calls `POST /messages` (PCM creation).
+   c. **CreateMessage(contactId, templateData):** Activity that calls `POST /messages`.
       - Expects `202 Accepted`.
 
 ### Temporal Patterns to Use:

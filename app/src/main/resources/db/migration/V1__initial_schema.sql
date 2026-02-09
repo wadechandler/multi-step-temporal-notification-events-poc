@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS contacts (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_contacts_external_id
     ON contacts (external_id_type, external_id_value);
 
--- Messages (PCMs) table
+-- Messages table
 CREATE TABLE IF NOT EXISTS messages (
     id              UUID PRIMARY KEY,
     contact_id      UUID NOT NULL REFERENCES contacts(id),

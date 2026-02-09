@@ -10,7 +10,7 @@ contacts (people/patients). For each contact, the system must:
 
 1. **Look up** the contact in the platform.
 2. **Create** the contact if they don't exist, then wait for eventual consistency (202 -> 200).
-3. **Send** a personalized message (PCM) once the contact is resolved.
+3. **Send** a personalized message once the contact is resolved.
 
 This multi-step process must survive crashes, handle retries gracefully, and scale horizontally.
 

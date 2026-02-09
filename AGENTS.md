@@ -13,7 +13,7 @@ The scenario: An upstream system sends notification events (e.g., prescription o
 may reference 1 or more contacts (patients/people). The system must:
 1. Look up each contact in the engagement platform.
 2. If a contact doesn't exist, create it and wait for eventual consistency.
-3. Once all contacts are resolved, create personalized messages (PCMs) for each.
+3. Once all contacts are resolved, create personalized messages for each.
 
 This is a multi-step, potentially long-running process that must be **durable** (survive crashes),
 **scalable** (>1M events/day), and **observable**.
