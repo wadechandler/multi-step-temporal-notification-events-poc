@@ -43,7 +43,7 @@ The system strictly separates Commands (writes via Kafka events) from Queries (r
 Support two persistence modes. In a given deployment, Temporal and the App share the same DB technology:
 - **Mode A (Default):** CloudNativePG (CNPG) - standard PostgreSQL on K8s.
 - **Mode B:** YugabyteDB OSS - distributed PostgreSQL-compatible on K8s.
-- **Constraint:** Always use separate databases: `temporal_db`, `temporal_visibility_db`, and `business_db`.
+- **Constraint:** Always use separate databases: `temporal`, `temporal_visibility`, and `business`.
 - **Visibility:** Use Postgres-based Advanced Visibility for Temporal (no Elasticsearch needed).
 - **DataGrip Access:** DB services must be exposed via NodePort for local DataGrip connectivity.
 

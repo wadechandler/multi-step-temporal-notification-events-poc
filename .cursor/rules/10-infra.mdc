@@ -21,10 +21,11 @@ globs: infra/**
 The `infra/scripts/setup.sh` script accepts a `--db` flag:
 - `--db cnpg` (default): Deploys CNPG clusters for Temporal and App.
 - `--db yugabyte`: Deploys YugabyteDB for Temporal and App.
-Both modes create the same logical databases: `temporal_db`, `temporal_visibility_db`, `business_db`.
+Both modes create the same logical databases: `temporal`, `temporal_visibility`, `business`.
+CNPG cluster names use hyphens (`temporal-db`, `business-db`); database names inside use underscores.
 
 ## Scripts
 - `infra/scripts/setup.sh` — Full cluster bootstrap (idempotent).
 - `infra/scripts/teardown.sh` — Destroy the KIND cluster.
-- `infra/scripts/deploy-app.sh` — Build the app Docker image, load into KIND, deploy.
+- `infra/scripts/verify.sh` — Verify all infrastructure components are healthy.
 - All scripts must be POSIX-compatible bash. Use `set -euo pipefail`.

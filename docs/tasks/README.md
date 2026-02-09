@@ -25,15 +25,20 @@ For simple tasks, one agent can do all roles. For complex infra tasks, splitting
 
 ## Task Order
 
-| # | Task | Status | Dependencies |
-|---|------|--------|--------------|
-| 00 | [Fix setup.sh and slim for local dev](00-fix-setup-script.md) | TODO | None |
-| 01 | [Stand up and validate CNPG infra](01-infra-validate-cnpg.md) | TODO | Task 00 |
-| 02 | [Stand up and validate YugabyteDB infra](02-infra-validate-yugabyte.md) | TODO | Task 00 |
-| 03 | [DataGrip connection guide](03-datagrip-setup.md) | TODO | Task 01 or 02 |
-| 04 | [Build CQRS services](04-cqrs-services.md) | TODO | Task 01 |
-| 05 | [Build Temporal workflow](05-temporal-workflow.md) | TODO | Task 04 |
-| 06 | [API collection and end-to-end test](06-api-and-e2e.md) | TODO | Task 05 |
+| #   | Task | Status | Dependencies |
+|-----|------|--------|--------------|
+| 00  | [Fix setup.sh and slim for local dev](00-fix-setup-script.md) | Done | None |
+| 01  | [Stand up and validate CNPG infra](01-infra-validate-cnpg.md) | Done | Task 00 |
+| 02  | [Stand up and validate YugabyteDB infra](02-infra-validate-yugabyte.md) | TODO | Task 00 |
+| 03  | [DataGrip connection guide](03-datagrip-setup.md) | Done | Task 01 |
+| 04  | [Build CQRS services](04-cqrs-services.md) | Done | Task 01 |
+| 04a | [Event model refinement](04a-event-model-refinement.md) | Done | Task 04 |
+| 05  | [Build Temporal workflow](05-temporal-workflow.md) | Done | Task 04 |
+| 06  | [API collection and end-to-end test](06-api-and-e2e.md) | Done | Task 05 |
+| 06b | [E2E test automation](06b-e2e-automation.md) | Done | Task 06 |
+| 07  | [SB4 auto-config fix](07-sb4-autoconfig-fix.md) | Done | Task 05 |
+| 08  | [Kafka local connectivity](08-kafka-local-connectivity.md) | Done | Task 07 |
+| 09  | [Onboarding script & port config](09-onboarding-and-port-config.md) | TODO | Task 08 |
 
 ## Key Files for Context
 
