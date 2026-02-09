@@ -55,6 +55,10 @@ management:
       prometheus:
         enabled: true
 
+# Services (base URL for activity HTTP calls to CQRS endpoints)
+services:
+  base-url: ${SERVICES_BASE_URL:http://localhost:8080}
+
 # Server
 server:
   port: 8080
