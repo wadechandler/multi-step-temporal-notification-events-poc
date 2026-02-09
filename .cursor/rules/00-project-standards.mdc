@@ -1,0 +1,72 @@
+---
+description: Core project standards, tech stack, and architecture for the Notification POC
+globs: *
+---
+
+# Project: Durable Multi-Step Notification Engine POC
+
+## 1. Identity & Purpose
+- **Package:** `com.wadechandler.notification.poc`
+- **Goal:** Demonstrate a high-throughput (>1M events/day) durable workflow engine for notification processing using Temporal.io, CQRS, and event-driven architecture.
+- **Origin:** Architecture designed collaboratively with Gemini, implemented with Cursor.
+
+## 2. Tech Stack (Strict - Do Not Deviate)
+- **Language:** Java 25 (via SDKMAN `.sdkmanrc`). Virtual Threads enabled for Temporal Activity workers.
+- **Framework:** Spring Boot 4.0.2 (Spring Framework 7.0.3, Jakarta EE 11).
+- **Build:** Gradle 8.14+ (Groovy DSL). Project uses a Gradle wrapper.
+- **Workflow Orchestration:** Temporal.io OSS, Java SDK 1.32.1.
+- **Messaging:** Apache Kafka 4.x (deployed via Strimzi Operator on K8s).
+- **Infrastructure:** Kubernetes (KIND for local dev), Helm for deployments.
+- **Schema Migration:** Flyway.
+- **Observability:** OpenTelemetry, Micrometer, Prometheus, Grafana.
+
+## 3. Architecture Pattern: CQRS + Event-Driven + Temporal Saga
+The system strictly separates Commands (writes via Kafka events) from Queries (reads from DB).
+
+### Command Path (Asynchronous):
+1. REST API receives `POST /contacts` (or `/messages`).
+2. API publishes `ContactCreateRequested` event to a Kafka command topic.
+3. API returns `202 Accepted` immediately.
+4. A backend Kafka consumer (command handler) processes the event, writes to DB, and publishes a `ContactCreated` fact event.
+
+### Query Path:
+1. REST API receives `GET /contacts/{id}`.
+2. API reads directly from the database.
+3. Returns `200 OK` with data, or `404 Not Found` if not yet created (eventual consistency).
+
+### Temporal's Role (Saga Orchestrator):
+- Temporal does NOT own the data. It orchestrates the multi-step workflow.
+- A Kafka consumer reads from the `notification-events` topic and starts a Temporal Workflow for each event.
+- The Workflow coordinates: Contact Lookup -> Contact Creation (if needed) -> Poll for Consistency -> Message (PCM) Creation.
+
+## 4. Database Strategy (Toggleable)
+Support two persistence modes. In a given deployment, Temporal and the App share the same DB technology:
+- **Mode A (Default):** CloudNativePG (CNPG) - standard PostgreSQL on K8s.
+- **Mode B:** YugabyteDB OSS - distributed PostgreSQL-compatible on K8s.
+- **Constraint:** Always use separate databases: `temporal_db`, `temporal_visibility_db`, and `business_db`.
+- **Visibility:** Use Postgres-based Advanced Visibility for Temporal (no Elasticsearch needed).
+- **DataGrip Access:** DB services must be exposed via NodePort for local DataGrip connectivity.
+
+## 5. Coding Standards
+- **Lombok:** Allowed for DTOs and models.
+- **JSON:** Jackson (v3.0.4 ships with Spring Boot 4.0.2).
+- **Null Safety:** Use JSpecify annotations where practical.
+- **Testing:** JUnit Jupiter 6.x, Testcontainers, Temporal TestWorkflowEnvironment.
+- **Temporal Rules:**
+  - Workflows MUST be deterministic. No I/O, no `Thread.sleep()`, no `Random`, no `UUID.randomUUID()`, no `System.currentTimeMillis()` inside workflows.
+  - Use `Workflow.sleep()` for durable timers in workflows.
+  - All I/O (DB, HTTP, Kafka) happens in Activities only.
+  - Use Activity `RetryOptions` for polling patterns (e.g., waiting for eventual consistency).
+  - Use Virtual Threads for Activity thread pools to maximize I/O concurrency.
+
+## 6. Kafka Topics
+- `notification-events` — External events that trigger workflows.
+- `contact-commands` — ContactCreateRequested commands.
+- `contact-events` — ContactCreated fact events.
+- `message-commands` — MessageCreateRequested commands.
+- `message-events` — MessageCreated fact events.
+
+## 7. Domain Model (Generic - No Company IP)
+- **ExternalEvent:** `{ eventId: UUID, eventType: String, payload: Object }` — Trigger from upstream.
+- **Contact:** `{ id: UUID, externalIds: Map<String,String>, email: String, phone: String, status: String }` — A reachable person.
+- **Message (PCM):** `{ id: UUID, contactId: UUID, templateId: String, channel: String, content: String, status: String }` — A composed communication.

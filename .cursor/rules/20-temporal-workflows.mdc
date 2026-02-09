@@ -1,0 +1,41 @@
+---
+description: Temporal workflow and activity patterns for the notification processing saga
+globs: app/src/**/*.java
+---
+
+# Temporal Workflow Standards
+
+## Task Queue
+- Name: `NOTIFICATION_QUEUE`
+
+## Workflow: NotificationWorkflow
+Entry point for processing a single notification event. Receives an ExternalEvent.
+
+### Steps (Saga):
+1. **Parse Event:** Extract contact external IDs and message template info from the event payload.
+2. **For Each Contact** (may be 1 or more per event):
+   a. **GetContact(externalId):** Activity that calls `GET /contacts?externalIdType={type}&externalIdValue={value}`.
+      - If `200 OK`: Contact exists, proceed.
+      - If `404 Not Found`: Contact does not exist, go to step b.
+   b. **CreateContact(contactData):** Activity that calls `POST /contacts`.
+      - Expects `202 Accepted` (async creation).
+      - Then enters a **Polling Loop**: Call GetContact with exponential backoff via Activity RetryOptions until `200 OK`.
+   c. **CreateMessage(contactId, templateData):** Activity that calls `POST /messages` (PCM creation).
+      - Expects `202 Accepted`.
+
+### Temporal Patterns to Use:
+- **Activity RetryOptions:** For the polling pattern. Set `initialInterval`, `backoffCoefficient`, `maximumAttempts`.
+- **Workflow.sleep():** If you need durable wait between saga steps (NOT Thread.sleep).
+- **Child Workflows:** Consider if per-contact processing should be a child workflow for isolation.
+- **Saga Compensation:** If message creation fails after contact was created, log it (no rollback needed for this POC, but structure the code to allow it).
+
+### Activity Implementation:
+- Activities are the ONLY place for I/O (HTTP calls, DB queries, Kafka publishing).
+- Use Virtual Threads for the Activity worker thread pool.
+- Activities should be idempotent where possible.
+- Use specific exception types: `ContactNotFoundException`, `ServiceUnavailableException`, etc.
+
+### Testing:
+- Use `TestWorkflowEnvironment` for workflow unit tests.
+- Use `TestActivityEnvironment` for activity unit tests.
+- Use Testcontainers for integration tests against real Postgres/Kafka.

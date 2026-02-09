@@ -1,0 +1,49 @@
+plugins {
+    id 'org.springframework.boot'
+    id 'io.spring.dependency-management'
+}
+
+dependencies {
+    // Spring Boot
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+
+    // Kafka
+    implementation 'org.springframework.kafka:spring-kafka'
+
+    // Temporal SDK
+    // Note: temporal-spring-boot-starter may need manual bean config with SB4.
+    // If auto-config fails, use temporal-sdk directly and configure beans manually.
+    implementation 'io.temporal:temporal-sdk:1.32.1'
+    implementation 'io.temporal:temporal-opentracing:1.32.1'
+
+    // Database
+    runtimeOnly 'org.postgresql:postgresql'
+    implementation 'org.flywaydb:flyway-core'
+    implementation 'org.flywaydb:flyway-database-postgresql'
+
+    // Observability
+    implementation 'io.micrometer:micrometer-registry-prometheus'
+
+    // Utilities
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+
+    // Testing
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.kafka:spring-kafka-test'
+    testImplementation 'io.temporal:temporal-testing:1.32.1'
+    testImplementation platform('org.testcontainers:testcontainers-bom:1.20.6')
+    testImplementation 'org.testcontainers:junit-jupiter'
+    testImplementation 'org.testcontainers:postgresql'
+    testImplementation 'org.testcontainers:kafka'
+}
+
+// Spring Boot 4.0.2 dependency management handles most version alignment.
+// Override specific versions here if needed:
+dependencyManagement {
+    dependencies {
+        // Temporal BOM is not managed by Spring Boot, so we pin it explicitly above.
+    }
+}

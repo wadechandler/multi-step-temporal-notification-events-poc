@@ -1,0 +1,50 @@
+# KIND cluster configuration for the Notification POC
+# 3 worker nodes to support Kafka (Strimzi) and YugabyteDB HA requirements.
+#
+# Port mappings expose services on the host for local development:
+#   - 30080: Temporal UI
+#   - 30081: Grafana
+#   - 30432: PostgreSQL (CNPG or Yugabyte) - for DataGrip
+#   - 30433: Temporal DB (if separate access needed)
+#   - 30092: Kafka bootstrap (for local Kafka tooling)
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: notification-poc
+nodes:
+  - role: control-plane
+    kubeadmConfigPatches:
+      - |
+        kind: InitConfiguration
+        nodeRegistration:
+          kubeletExtraArgs:
+            node-labels: "ingress-ready=true"
+    extraPortMappings:
+      # Temporal Web UI
+      - containerPort: 30080
+        hostPort: 30080
+        protocol: TCP
+      # Grafana
+      - containerPort: 30081
+        hostPort: 30081
+        protocol: TCP
+      # Business DB (CNPG or Yugabyte) - for DataGrip access
+      - containerPort: 30432
+        hostPort: 30432
+        protocol: TCP
+      # Temporal persistence DB
+      - containerPort: 30433
+        hostPort: 30433
+        protocol: TCP
+      # Kafka bootstrap
+      - containerPort: 30092
+        hostPort: 30092
+        protocol: TCP
+  - role: worker
+    labels:
+      workload: general
+  - role: worker
+    labels:
+      workload: general
+  - role: worker
+    labels:
+      workload: general

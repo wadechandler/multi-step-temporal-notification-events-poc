@@ -1,0 +1,60 @@
+spring:
+  application:
+    name: notification-poc
+
+  # Database (Business DB)
+  datasource:
+    url: jdbc:postgresql://localhost:30432/business
+    username: app
+    password: ${BUSINESS_DB_PASSWORD:app}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate  # Flyway manages schema
+    open-in-view: false
+
+  # Flyway
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+  # Kafka
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:30092}
+    consumer:
+      group-id: notification-poc
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+  # Virtual Threads (enabled by default in SB4, explicitly set for clarity)
+  threads:
+    virtual:
+      enabled: true
+
+# Temporal
+temporal:
+  connection:
+    target: ${TEMPORAL_ADDRESS:localhost:7233}
+  worker:
+    task-queue: NOTIFICATION_QUEUE
+
+# Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+# Server
+server:
+  port: 8080

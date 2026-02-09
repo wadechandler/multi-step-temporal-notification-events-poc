@@ -1,0 +1,30 @@
+---
+description: Infrastructure patterns for KIND, Helm, operators, and database setup
+globs: infra/**
+---
+
+# Infrastructure Standards
+
+## KIND Cluster
+- Use a 3-worker-node configuration (required for YugabyteDB and Kafka HA).
+- Map extra ports for NodePort access to databases and Temporal UI from the host.
+- Cluster name: `notification-poc`.
+
+## Operators & Helm Charts
+- **Strimzi:** Latest stable for Kafka 4.x with KRaft mode (no ZooKeeper).
+- **CNPG (CloudNativePG):** Latest stable operator. Define clusters via `Cluster` CRDs.
+- **YugabyteDB:** Yugabyte Platform operator or direct StatefulSet deployment.
+- **Temporal:** Helm chart version 0.73.1 (stable). Configure with Postgres-based persistence and Advanced Visibility (no Elasticsearch).
+- **Prometheus + Grafana:** kube-prometheus-stack Helm chart for metrics collection.
+
+## Database Toggle Pattern
+The `infra/scripts/setup.sh` script accepts a `--db` flag:
+- `--db cnpg` (default): Deploys CNPG clusters for Temporal and App.
+- `--db yugabyte`: Deploys YugabyteDB for Temporal and App.
+Both modes create the same logical databases: `temporal_db`, `temporal_visibility_db`, `business_db`.
+
+## Scripts
+- `infra/scripts/setup.sh` — Full cluster bootstrap (idempotent).
+- `infra/scripts/teardown.sh` — Destroy the KIND cluster.
+- `infra/scripts/deploy-app.sh` — Build the app Docker image, load into KIND, deploy.
+- All scripts must be POSIX-compatible bash. Use `set -euo pipefail`.

@@ -1,0 +1,4 @@
+# Enable auto-env to automatically switch versions when entering the project
+# Run: sdk env install
+java=25.0.2-open
+gradle=8.14.4
