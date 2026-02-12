@@ -205,13 +205,18 @@ independent scaling of workflow orchestration vs. contact resolution vs. message
 |-----------|---------|---------|
 | Java | 25 | Language runtime (Virtual Threads) |
 | Spring Boot | 4.0.2 | Application framework |
-| Temporal SDK | 1.32.1 | Durable workflow engine |
-| Kafka | 4.1.1 (Strimzi) | Event streaming / CQRS |
-| KEDA | 2.19.0 | Event-driven autoscaling |
+| Temporal SDK | 1.32.1 | Durable workflow client + worker SDK |
+| Temporal Server | OSS (Helm 0.73.1) | Workflow orchestration engine |
+| Kafka | 4.1.1 (Strimzi 0.50.0) | Event streaming / CQRS |
 | PostgreSQL | CNPG / YugabyteDB | Persistence (toggleable) |
 | Flyway | 11.x | Schema migration |
+| KEDA | 2.19.0 | Event-driven autoscaling |
+| Prometheus | kube-prometheus-stack | Metrics collection (KEDA trigger source) |
+| Grafana | kube-prometheus-stack | Metrics dashboards and observability |
+| Kubernetes | KIND (local) | Container orchestration |
+| Helm | 4.x | Kubernetes package management |
 | Gradle | 8.14 | Build tool (Groovy DSL) |
 
 ## License
 
-This project is for educational and demonstration purposes.
+This project is licensed under the [MIT License](LICENSE).
