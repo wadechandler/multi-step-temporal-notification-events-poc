@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification-service
+  labels:
+    {{- include "notification-poc.labels" (dict "name" "notification-service" "context" $) | nindent 4 }}
+spec:
+  replicas: {{ .Values.service.replicas | default 1 }}
+  selector:
+    matchLabels:
+      {{- include "notification-poc.selectorLabels" (dict "name" "notification-service") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "notification-poc.selectorLabels" (dict "name" "notification-service") | nindent 8 }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/actuator/prometheus"
+    spec:
+      containers:
+        - name: notification-service
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy | default "IfNotPresent" }}
+          ports:
+            - containerPort: 8080
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: "service"
+            - name: BUSINESS_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.database.secretName | default "business-db-app" }}
+                  key: password
+          envFrom:
+            - configMapRef:
+                name: notification-service-config
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: {{ .Values.service.probes.liveness.initialDelaySeconds | default 30 }}
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8080
+            initialDelaySeconds: {{ .Values.service.probes.readiness.initialDelaySeconds | default 15 }}
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: {{ .Values.service.resources.requests.cpu | default "500m" }}
+              memory: {{ .Values.service.resources.requests.memory | default "512Mi" }}
+            limits:
+              cpu: {{ .Values.service.resources.limits.cpu | default "1000m" }}
+              memory: {{ .Values.service.resources.limits.memory | default "1Gi" }}

@@ -25,12 +25,14 @@ For simple tasks, one agent can do all roles. For complex infra tasks, splitting
 
 ## Task Order
 
+### Foundation (Tasks 00-09)
+
 | #   | Task | Status | Dependencies |
 |-----|------|--------|--------------|
 | 00  | [Fix setup.sh and slim for local dev](00-fix-setup-script.md) | Done | None |
 | 01  | [Stand up and validate CNPG infra](01-infra-validate-cnpg.md) | Done | Task 00 |
 | 02  | [Stand up and validate YugabyteDB infra](02-infra-validate-yugabyte.md) | TODO | Task 00 |
-| 03  | [DataGrip connection guide](03-datagrip-setup.md) | Done | Task 01 |
+| 03  | [DataGrip connection guide + credentials script](03-datagrip-setup.md) | TODO | Task 01 |
 | 04  | [Build CQRS services](04-cqrs-services.md) | Done | Task 01 |
 | 04a | [Event model refinement](04a-event-model-refinement.md) | Done | Task 04 |
 | 05  | [Build Temporal workflow](05-temporal-workflow.md) | Done | Task 04 |
@@ -38,7 +40,35 @@ For simple tasks, one agent can do all roles. For complex infra tasks, splitting
 | 06b | [E2E test automation](06b-e2e-automation.md) | Done | Task 06 |
 | 07  | [SB4 auto-config fix](07-sb4-autoconfig-fix.md) | Done | Task 05 |
 | 08  | [Kafka local connectivity](08-kafka-local-connectivity.md) | Done | Task 07 |
-| 09  | [Onboarding script & port config](09-onboarding-and-port-config.md) | TODO | Task 08 |
+| 09  | [Onboarding script & port config](09-onboarding-and-port-config.md) | Deferred | Task 08 |
+
+> **Task 09 note:** Deferred. Its concerns (port configurability, `start.sh`, `ports.env`) are
+> superseded by the Helm-based deployment workflow introduced in Task 12. Relevant pieces
+> (port configuration, developer experience) are folded into Helm values and scripts.
+
+### Restructure & Scale (Tasks 10-16)
+
+| #   | Task | Status | Dependencies | Parallelizable |
+|-----|------|--------|--------------|----------------|
+| 10  | [Multi-module Gradle restructure](10-gradle-restructure.md) | Done | Task 08 | With Task 11 |
+| 11  | [Infrastructure updates (Kafka 4.1.1, KEDA)](11-infra-updates.md) | Done | Task 01 | With Task 10 |
+| 12  | [Helm charts + KIND deployment](12-helm-kind-deploy.md) | Done | Tasks 10, 11 | — |
+| 13  | [Kafka share groups feature flag](13-kafka-share-groups.md) | TODO | Task 12 | With Task 14 |
+| 14  | [Temporal task queue splitting](14-temporal-queue-split.md) | Done | Task 12 | With Task 13 |
+| 15  | [Load testing + scaling demo](15-load-test-scaling.md) | TODO | Tasks 13, 14 | — |
+| 16  | [Documentation updates (final pass)](16-documentation-updates.md) | In Progress | Task 15 | — |
+
+### Agent Parallelism
+
+```
+Phase A (parallel):  Task 10 + Task 11
+Phase B (sequential): Task 12
+Phase C (parallel):  Task 13 + Task 14
+Phase D (sequential): Task 15
+Phase E (sequential): Task 16
+
+Task 03 is independent — can be done anytime infra is running.
+```
 
 ## Key Files for Context
 

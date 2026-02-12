@@ -137,6 +137,65 @@ Tasks:
 3. A `TestDataController` or CLI tool to inject bulk events for load testing.
 4. Grafana dashboards for Temporal metrics.
 
+---
+
+### Phase 6: Multi-Module Restructure (Task 10)
+**Goal:** Split the monolithic `app/` module into shared libraries + a profile-controlled boot module.
+
+- **Modules:** `notification-common` (DTOs, constants), `notification-repository` (JPA, Flyway), `notification-messaging` (Kafka infra), `notification-app` (single boot module).
+- **Spring Profiles:** `service`, `ev-worker`, `wf-worker` control which beans activate per deployment.
+- **Single Docker Image:** Deployed multiple times via Helm with different `SPRING_PROFILES_ACTIVE`.
+- **Local Dev:** Run with all three profiles for current all-in-one behavior.
+
+### Phase 7: Infrastructure Updates (Task 11)
+**Goal:** Upgrade Kafka, install KEDA, enable share groups.
+
+- **Kafka 4.0.0 → 4.1.1:** Latest stable, required for KIP-932 share groups preview.
+- **KEDA Operator:** Kubernetes Event-Driven Autoscaling — native scalers for Temporal queues, Kafka lag, and Prometheus metrics.
+- **Share Groups (KIP-932):** Enable `share.version=1` on the Kafka cluster for queue-like consumption.
+
+### Phase 8: Helm Charts + KIND Deployment (Task 12)
+**Goal:** Deploy all components into KIND via Helm with KEDA autoscaling.
+
+- **Helm chart:** `charts/notification-poc/` with templates for `service/`, `ev-worker/`, `wf-worker/`.
+- **KEDA ScaledObjects:** Every component gets a composable ScaledObject with cpu + memory baseline + app-specific trigger.
+  - Service: p90 HTTP latency via Prometheus.
+  - Event worker: Kafka consumer group lag.
+  - Workflow worker: Temporal task queue backlog.
+- **Naming:** `-service`, `-ev-worker`, `-wf-worker` suffixes.
+- **Injectable config:** All scaling thresholds, resource limits, and feature flags configurable via `values.yaml`.
+
+### Phase 9: Kafka Share Groups Feature Flag (Task 13)
+**Goal:** Demonstrate dual-mode Kafka consumption (consumer groups vs share groups).
+
+- **Feature flag:** `kafka.consumer-mode` property (`consumer-group` default, `share-group` opt-in).
+- **Implementation:** `@ConditionalOnProperty` switches between `ConsumerFactory` and `ShareConsumerFactory`.
+- **Use case:** Same codebase works with older Kafka clusters (consumer groups) and upgraded 4.1+ clusters (share groups).
+- **KIP-932 implications:** 4.0 early access incompatible with 4.1 preview. All brokers must be 4.1+ to enable. Preview only.
+
+### Phase 10: Temporal Task Queue Splitting (Task 14)
+**Goal:** Separate contact and message activities onto independent task queues for granular scaling.
+
+- **Queues:** `NOTIFICATION_QUEUE` (workflow), `CONTACT_ACTIVITY_QUEUE`, `MESSAGE_ACTIVITY_QUEUE`.
+- **Workflow code:** Activity stubs specify `setTaskQueue()` to route to the correct queue.
+- **Worker profiles:** `wf-worker` (combined), `wf-worker-orchestrator`, `contact-wf-worker`, `message-wf-worker`.
+- **No feature flag:** The Helm chart always deploys all 3 wf-worker types in K8s. Combined mode (`wf-worker` profile) is for local dev only.
+- **KEDA:** Each queue gets its own ScaledObject with Temporal scaler targeting that specific queue.
+
+### Phase 11: Load Testing + Scaling Demonstration (Task 15)
+**Goal:** Prove the scaling architecture works end-to-end with a repeatable demo.
+
+- **Load test:** Script that blasts `POST /events` with configurable concurrency.
+- **Observation:** KEDA scales workers up under load, scales back down when idle.
+- **Thresholds:** Tuned low for KIND (demonstrable with modest load); documented for production calibration.
+- **Documentation:** Scaling demo runbook with step-by-step instructions.
+
+### Phase 12: Documentation Final Pass (Task 16)
+**Goal:** All documentation consistent with the actual project state.
+
+- Update `AGENTS.md`, `.cursor/rules/*.mdc`, `README.md`, `scripts/README.md`.
+- Verify all file paths reference `notification-app/` (not `app/`).
+
 ## Cursor Workflow Tips
 
 ### Using Cursor Rules
@@ -146,12 +205,14 @@ The `.cursor/rules/` directory contains context-specific rules:
 - `20-temporal-workflows.mdc` — Active when editing Java source. Temporal-specific patterns.
 
 ### Suggested Prompts for Building Each Phase
-When working with Cursor on each phase, reference this file and the specific phase:
+For Phases 1-5, reference this file and the specific phase. For Phases 6-12, use the
+self-contained task documents in `docs/tasks/` (each has a ready-to-use prompt at the bottom):
 
 - **Phase 1:** "Read AGENTS.md Phase 1 and the infra rules. Generate the KIND config and setup script."
 - **Phase 2:** "Read AGENTS.md Phase 2. Generate the Gradle build files and application.yml."
 - **Phase 3:** "Read AGENTS.md Phase 3 and the project standards. Implement the Contact and Message CQRS services."
 - **Phase 4:** "Read AGENTS.md Phase 4 and the temporal workflow rules. Implement the NotificationWorkflow and Activities."
+- **Phase 6-12:** Use the prompts embedded in `docs/tasks/10-*.md` through `docs/tasks/16-*.md`.
 
 ## Key Decisions & Rationale
 
@@ -164,6 +225,10 @@ When working with Cursor on each phase, reference this file and the specific pha
 | DB Toggle | CNPG vs YugabyteDB | Evaluate both for team; Yugabyte offers distributed SQL if infra team can support it |
 | Java 25 + Virtual Threads | Performance | Virtual Threads ideal for I/O-heavy Temporal activities; latest LTS features |
 | Spring Boot 4 | Latest stable | Jakarta EE 11, Spring Framework 7, native Kafka 4.x support |
+| Autoscaling | KEDA | Native Temporal, Kafka, and Prometheus scalers. Composable triggers. Replaces standalone HPA. |
+| Kafka Share Groups | KIP-932 (feature-flagged) | Queue-like semantics for independent events. Feature flag supports mixed-version clusters. |
+| Single Image + Profiles | Spring profiles | Simpler CI, one image deployed N ways via Helm. Feature-flag pattern for team adoption. |
+| Deployment Naming | -service / -ev-worker / -wf-worker / -contact-wf-worker / -message-wf-worker | Clear suffix convention: -service for REST, -ev-worker for Kafka event workers, -wf-worker for Temporal (split into orchestrator + activity workers) |
 
 ## Compatibility Notes
 

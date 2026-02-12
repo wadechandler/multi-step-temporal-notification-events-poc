@@ -1,4 +1,4 @@
-# Task 03: DataGrip Connection Guide
+# Task 03: DataGrip Connection Guide + Credentials Script
 
 ## Context
 
@@ -22,18 +22,94 @@ credentials or manually set passwords are used.
 - `README.md` — Should be updated with connection instructions
 
 ## Deliverables
-1. A `docs/guides/datagrip-connection.md` with step-by-step instructions:
-   - How to retrieve passwords from K8s secrets for CNPG mode
-   - How to retrieve passwords for YugabyteDB mode
-   - DataGrip connection configuration (host, port, database, user, password, SSL off)
-   - Screenshots-equivalent text descriptions of each DataGrip dialog
-   - Verification query: `SELECT version();` and `SELECT * FROM contacts LIMIT 1;`
-2. Updated `README.md` with a "Database Access" section linking to the guide
+
+### 1. Create `scripts/db-credentials.sh`
+
+A script that extracts database connection info from K8s secrets and prints it in a
+format ready to paste into DataGrip or use with `psql`:
+
+```bash
+#!/usr/bin/env bash
+# db-credentials.sh — Export database connection info for DataGrip / psql
+#
+# Usage:
+#   ./scripts/db-credentials.sh           # Print all credentials
+#   ./scripts/db-credentials.sh --psql    # Print psql connection commands
+set -euo pipefail
+
+echo "============================================"
+echo "  Database Connection Info"
+echo "  (from KIND cluster K8s secrets)"
+echo "============================================"
+echo ""
+
+# Business DB
+BIZ_PASSWORD=$(kubectl get secret business-db-app -n default \
+    -o jsonpath='{.data.password}' 2>/dev/null | base64 -d)
+echo "=== Business Database ==="
+echo "  Host:     localhost"
+echo "  Port:     30432"
+echo "  Database: business"
+echo "  User:     app"
+echo "  Password: ${BIZ_PASSWORD:-<not found - is CNPG running?>}"
+echo ""
+
+# Temporal DB
+TEMP_PASSWORD=$(kubectl get secret temporal-db-superuser -n temporal \
+    -o jsonpath='{.data.password}' 2>/dev/null | base64 -d)
+echo "=== Temporal Database ==="
+echo "  Host:     localhost"
+echo "  Port:     30433"
+echo "  Database: temporal"
+echo "  User:     temporal"
+echo "  Password: ${TEMP_PASSWORD:-<not found - is Temporal DB running?>}"
+echo ""
+
+if [[ "${1:-}" == "--psql" ]]; then
+    echo "=== psql Commands ==="
+    echo "PGPASSWORD='${BIZ_PASSWORD}' psql -h localhost -p 30432 -U app -d business"
+    echo "PGPASSWORD='${TEMP_PASSWORD}' psql -h localhost -p 30433 -U temporal -d temporal"
+fi
+```
+
+### 2. Create `docs/guides/datagrip-connection.md`
+
+Step-by-step instructions:
+
+1. How to run `scripts/db-credentials.sh` to get connection info
+2. DataGrip "New Data Source" configuration for each database:
+   - PostgreSQL driver
+   - Host: localhost, Port: 30432 (or 30433)
+   - Database: business (or temporal)
+   - User/Password from the script
+   - SSL: off (local development)
+3. Verification query: `SELECT version();` and `SELECT * FROM contacts LIMIT 1;`
+4. Notes on CNPG vs YugabyteDB mode (different secret names)
+
+### 3. Update Root `README.md`
+
+Add a "Database Access" section:
+
+```markdown
+## Database Access
+
+Run `scripts/db-credentials.sh` to get connection credentials for all databases.
+For DataGrip setup instructions, see [docs/guides/datagrip-connection.md](docs/guides/datagrip-connection.md).
+
+Quick psql access:
+\`\`\`bash
+./scripts/db-credentials.sh --psql
+# Copy and paste the printed psql command
+\`\`\`
+```
 
 ## Acceptance Criteria
-- A colleague can follow the guide and connect DataGrip to all 3 databases
-- Password retrieval commands are correct and tested
-- Guide covers both CNPG and YugabyteDB modes
+- [ ] `scripts/db-credentials.sh` runs successfully and prints correct credentials
+- [ ] `scripts/db-credentials.sh --psql` prints valid psql connection commands
+- [ ] `docs/guides/datagrip-connection.md` exists with step-by-step instructions
+- [ ] A colleague can follow the guide and connect DataGrip to all databases
+- [ ] Root `README.md` has a "Database Access" section
+- [ ] Password retrieval commands handle missing secrets gracefully (show helpful message)
 
 ## Prompt (for Builder sub-agent)
 
@@ -44,14 +120,16 @@ Read the following files for context:
 - infra/scripts/verify.sh (see connection info output)
 - README.md
 
-Task: Create docs/guides/datagrip-connection.md with step-by-step DataGrip
-connection instructions for both CNPG and YugabyteDB modes.
+Task: Create the database credentials script and DataGrip connection guide.
 
-Include:
-1. Shell commands to retrieve each database password from K8s secrets
-2. DataGrip "New Data Source" configuration for each database
-3. Test queries to verify the connection
-4. Add a "Database Access" section to README.md linking to this guide
+Steps:
+1. Create scripts/db-credentials.sh that extracts passwords from K8s secrets
+   and prints formatted connection info. Include a --psql flag for copy-paste commands.
+   Make it executable: chmod +x scripts/db-credentials.sh.
+2. Create docs/guides/datagrip-connection.md with step-by-step DataGrip setup.
+3. Add a "Database Access" section to README.md.
+4. Test: run the script with infrastructure up, verify passwords are correct.
+5. Test: connect to business DB via psql using the printed command.
 
-Keep it concise and practical. No fluff.
+Keep it concise and practical.
 ```

@@ -1,0 +1,70 @@
+# KIND-specific overrides — lower resource limits and scaling thresholds.
+# Infrastructure addresses (kafka, temporal, prometheus) are inherited from
+# values.yaml; only component-specific tunables need overriding here.
+#
+# Usage: helm install ... -f charts/notification-poc/environments/local-values.yaml
+
+service:
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+  scaling:
+    maxReplicas: 3
+    prometheus:
+      threshold: "0.02"
+
+evWorker:
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "250m"
+      memory: "512Mi"
+  scaling:
+    maxReplicas: 3
+    kafka:
+      lagThreshold: "5"
+
+wfWorker:
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "250m"
+      memory: "512Mi"
+  scaling:
+    maxReplicas: 4
+    temporal:
+      targetQueueSize: "3"
+
+contactWfWorker:
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "250m"
+      memory: "512Mi"
+  scaling:
+    maxReplicas: 3
+    temporal:
+      targetQueueSize: "2"
+
+messageWfWorker:
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "250m"
+      memory: "512Mi"
+  scaling:
+    maxReplicas: 3
+    temporal:
+      targetQueueSize: "3"

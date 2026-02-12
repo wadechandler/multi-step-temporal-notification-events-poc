@@ -92,6 +92,31 @@ helm_repo_add() {
     fi
 }
 
+install_keda() {
+    echo ">>> Step 7: KEDA"
+    helm_repo_add kedacore https://kedacore.github.io/charts
+    helm repo update kedacore
+
+    if helm list -n keda 2>/dev/null | grep -q keda; then
+        info "KEDA already installed. Upgrading to ensure correct version..."
+        helm upgrade keda kedacore/keda \
+            --namespace keda \
+            --version 2.19.0 \
+            --wait --timeout 120s
+    else
+        helm install keda kedacore/keda \
+            --namespace keda \
+            --create-namespace \
+            --version 2.19.0 \
+            --wait --timeout 120s
+    fi
+
+    # Wait for KEDA operator pods to be fully ready
+    wait_for_pods keda app=keda-operator 120s
+    info "KEDA operator installed and ready."
+    echo ""
+}
+
 # ---------------------------------------------------------------------------
 # Step 1: Create KIND cluster
 # ---------------------------------------------------------------------------
@@ -136,11 +161,16 @@ helm_repo_add strimzi https://strimzi.io/charts/
 helm repo update strimzi
 
 if helm list -n kafka 2>/dev/null | grep -q strimzi; then
-    info "Strimzi operator already installed. Skipping."
+    info "Strimzi operator already installed. Upgrading to ensure correct version..."
+    helm upgrade strimzi strimzi/strimzi-kafka-operator \
+        --namespace kafka \
+        --version 0.50.0 \
+        --wait --timeout 120s
 else
     helm install strimzi strimzi/strimzi-kafka-operator \
         --namespace kafka \
         --create-namespace \
+        --version 0.50.0 \
         --wait --timeout 120s
 fi
 
@@ -180,8 +210,8 @@ metadata:
     strimzi.io/node-pools: enabled
 spec:
   kafka:
-    version: 4.0.0
-    metadataVersion: "4.0"
+    version: 4.1.1
+    metadataVersion: "4.1"
     listeners:
       - name: plain
         port: 9092
@@ -230,6 +260,39 @@ spec:
   replicas: 1
 TOPIC_EOF
 done
+
+# -------------------------------------------------------------------------
+# Enable Kafka Share Groups (KIP-932 Preview)
+# -------------------------------------------------------------------------
+# KIP-932 Share Groups — important upgrade implications:
+#
+# 1. Requires ALL brokers to be running Kafka 4.1+. Our single-broker
+#    KIND setup satisfies this requirement.
+#
+# 2. If share groups were previously enabled on a Kafka 4.0.0 cluster
+#    (early access), that cluster CANNOT be upgraded to 4.1. The 4.0
+#    early access format is incompatible with the 4.1 preview.
+#    → Always do a clean teardown when moving between Kafka versions
+#      that both had share groups enabled.
+#
+# 3. The feature is reversible (for preview):
+#       kafka-features.sh downgrade --feature share.version=0
+#    But once production records use share groups, downgrading would
+#    lose those share group offsets.
+#
+# 4. This is a PREVIEW feature (KIP-932), not recommended for production.
+#    We enable it here for POC evaluation alongside the consumer-mode
+#    feature flag (Task 13).
+# -------------------------------------------------------------------------
+info "Enabling Kafka share groups (KIP-932 preview)..."
+kubectl wait --for=condition=ready pod/poc-kafka-combined-0 -n kafka --timeout=120s
+
+kubectl exec -n kafka poc-kafka-combined-0 -- \
+    /opt/kafka/bin/kafka-features.sh \
+    --bootstrap-server localhost:9092 \
+    upgrade --feature share.version=1
+
+info "Share groups enabled (share.version=1)."
 echo ""
 
 # ---------------------------------------------------------------------------
@@ -561,6 +624,11 @@ fi
 echo ""
 
 # ---------------------------------------------------------------------------
+# Step 7: KEDA (Kubernetes Event-Driven Autoscaling)
+# ---------------------------------------------------------------------------
+install_keda
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo "============================================"
@@ -580,7 +648,8 @@ elif [[ "${DB_MODE}" == "yugabyte" ]]; then
 echo "   YugabyteDB:     localhost:30432 (YSQL port 5433)"
 echo "                   Databases: temporal, temporal_visibility, business"
 fi
-echo "   Kafka:          localhost:30092 (bootstrap)"
+echo "   Kafka:          localhost:30092 (bootstrap, v4.1.1, share groups enabled)"
+echo "   KEDA:           Installed in 'keda' namespace (event-driven autoscaling)"
 echo ""
 echo " Useful commands:"
 echo "   kubectl get pods -A                    # See all pods"
@@ -589,7 +658,33 @@ if [[ "${DB_MODE}" == "cnpg" ]]; then
 echo "   kubectl get cluster -n default         # Check CNPG clusters"
 fi
 echo "   kubectl get pods -n temporal           # Check Temporal pods"
+echo "   kubectl get pods -n keda               # Check KEDA pods"
+echo "   kubectl get scaledobjects -A           # Check KEDA ScaledObjects"
 echo ""
 echo " Verify the setup:"
 echo "   ./infra/scripts/verify.sh"
 echo ""
+
+# ---------------------------------------------------------------------------
+# Optional: Deploy the application
+# ---------------------------------------------------------------------------
+if [[ "${DEPLOY_APP:-false}" == "true" ]]; then
+    echo ">>> Optional: Building and deploying application..."
+    "${PROJECT_DIR}/scripts/build-and-load.sh"
+
+    helm upgrade --install notification-poc "${PROJECT_DIR}/charts/notification-poc" \
+        -f "${PROJECT_DIR}/charts/notification-poc/environments/local-values.yaml" \
+        --namespace default \
+        --wait --timeout 300s
+
+    echo ""
+    echo " Application deployed! Deployments:"
+    echo "   notification-service     (profile: service)"
+    echo "   notification-ev-worker   (profile: ev-worker)"
+    echo "   notification-wf-worker   (profile: wf-worker)"
+    echo ""
+    echo " Test with:"
+    echo "   kubectl port-forward svc/notification-service 8080:8080"
+    echo "   curl -s http://localhost:8080/actuator/health | jq ."
+    echo ""
+fi

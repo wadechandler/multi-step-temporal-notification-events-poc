@@ -1,0 +1,47 @@
+plugins {
+    id 'org.springframework.boot'
+}
+
+dependencies {
+    // Internal modules
+    implementation project(':notification-common')
+    implementation project(':notification-repository')
+    implementation project(':notification-messaging')
+
+    // Spring Boot (SB4 modular starters — see docs/tasks/07-sb4-autoconfig-fix.md)
+    implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+
+    // RestClient (SB4 requires explicit starter for RestClient.Builder auto-config)
+    implementation 'org.springframework.boot:spring-boot-starter-restclient'
+
+    // Temporal SDK (no SB4 starter — manual bean config in TemporalWorkerConfig)
+    implementation 'io.temporal:temporal-sdk:1.32.1'
+    implementation 'io.temporal:temporal-opentracing:1.32.1'
+
+    // Observability
+    implementation 'io.micrometer:micrometer-registry-prometheus'
+
+    // Utilities
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+    testCompileOnly 'org.projectlombok:lombok'
+    testAnnotationProcessor 'org.projectlombok:lombok'
+
+    // Testing (SB4 modular test starters)
+    testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-kafka-test'
+    testImplementation 'io.temporal:temporal-testing:1.32.1'
+    testImplementation platform('org.testcontainers:testcontainers-bom:1.20.6')
+    testImplementation 'org.testcontainers:junit-jupiter'
+    testImplementation 'org.testcontainers:postgresql'
+    testImplementation 'org.testcontainers:kafka'
+}
+
+// Spring Boot 4.0.2 dependency management handles most version alignment.
+// Override specific versions here if needed:
+dependencyManagement {
+    dependencies {
+        // Temporal BOM is not managed by Spring Boot, so we pin it explicitly above.
+    }
+}

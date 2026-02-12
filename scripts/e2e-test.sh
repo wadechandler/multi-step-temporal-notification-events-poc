@@ -234,8 +234,8 @@ else
     export BUSINESS_DB_PASSWORD
 
     cd "${PROJECT_DIR}"
-    info "Starting application with: ./gradlew :app:bootRun"
-    ./gradlew :app:bootRun > /tmp/app.log 2>&1 &
+    info "Starting application with: ./gradlew :notification-app:bootRun"
+    ./gradlew :notification-app:bootRun --args='--spring.profiles.active=service,ev-worker,wf-worker' > /tmp/app.log 2>&1 &
     APP_PID=$!
 
     info "Waiting for application to start (PID: ${APP_PID})..."

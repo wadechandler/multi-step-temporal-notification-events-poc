@@ -1,0 +1,31 @@
+{{- if .Values.wfWorker.scaling.enabled }}
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: notification-wf-worker
+  labels:
+    {{- include "notification-poc.labels" (dict "name" "notification-wf-worker" "context" $) | nindent 4 }}
+spec:
+  scaleTargetRef:
+    name: notification-wf-worker
+  minReplicaCount: {{ .Values.wfWorker.scaling.minReplicas | default 1 }}
+  maxReplicaCount: {{ .Values.wfWorker.scaling.maxReplicas | default 8 }}
+  cooldownPeriod: {{ .Values.wfWorker.scaling.cooldownPeriod | default 60 }}
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleDown:
+          stabilizationWindowSeconds: {{ .Values.wfWorker.scaling.scaleDownStabilization | default 120 }}
+  triggers:
+    {{- include "notification-poc.baseTriggers" .Values.wfWorker.scaling | nindent 4 }}
+    {{- if .Values.wfWorker.scaling.temporal.enabled }}
+    - type: temporal
+      metadata:
+        endpoint: {{ .Values.temporal.address | quote }}
+        namespace: {{ .Values.temporal.namespace | default "default" | quote }}
+        taskQueue: {{ .Values.temporal.taskQueue | quote }}
+        targetQueueSize: {{ .Values.wfWorker.scaling.temporal.targetQueueSize | quote }}
+        queueTypes: {{ .Values.wfWorker.scaling.temporal.queueTypes | default "workflow" | quote }}
+        unsafeSsl: {{ .Values.wfWorker.scaling.temporal.unsafeSsl | default "true" | quote }}
+    {{- end }}
+{{- end }}

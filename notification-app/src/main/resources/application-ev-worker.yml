@@ -1,0 +1,31 @@
+---
+# Conditional autoconfigure exclusions — only applied when service profile is NOT active.
+# When running combined (local dev with service,ev-worker,wf-worker), the service profile
+# handles DataSource/JPA/Flyway, so these exclusions must be skipped.
+spring:
+  config:
+    activate:
+      on-profile: "!service"
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration
+      - org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration
+      - org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration
+      - org.springframework.boot.data.jpa.autoconfigure.JpaRepositoriesAutoConfiguration
+
+---
+# Profile: ev-worker
+# Kafka event consumer (NotificationEventConsumer) + Temporal client (to start workflows).
+# No DataSource, no Flyway, no controllers. Web server runs only for actuator health/metrics.
+
+spring:
+  kafka:
+    consumer:
+      group-id: ${KAFKA_CONSUMER_GROUP_ID:notification-workflow-starter}
+      auto-offset-reset: earliest
+
+temporal:
+  connection:
+    target: ${TEMPORAL_ADDRESS:localhost:7233}
+  worker:
+    task-queue: ${TEMPORAL_TASK_QUEUE:NOTIFICATION_QUEUE}

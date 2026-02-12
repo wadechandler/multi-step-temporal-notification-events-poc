@@ -8,6 +8,13 @@ This guide walks through the complete notification processing flow from event in
 - Temporal UI accessible at http://localhost:30080
 - Kafka topics created: `notification-events`, `contact-commands`, `contact-events`, `message-commands`, `message-events`
 
+> **Kubernetes deployment alternative:** Instead of running the app locally via `bootRun`
+> (Steps 2-3 below), you can deploy into KIND via Helm:
+> `./scripts/build-and-load.sh && helm install notification-poc charts/notification-poc -f charts/notification-poc/environments/local-values.yaml`.
+> This deploys 5 pods (service, ev-worker, wf-worker, contact-wf-worker, message-wf-worker).
+> Then port-forward to test: `kubectl port-forward svc/notification-service 8080:8080`.
+> Skip to Step 4 after the pods are running.
+
 ## Step 1: Verify Infrastructure
 
 ```bash
@@ -55,7 +62,7 @@ export TEMPORAL_ADDRESS=localhost:7233
 export BUSINESS_DB_PASSWORD=$(kubectl get secret business-db-app -n default -o jsonpath='{.data.password}' | base64 -d)
 
 # Run the application
-./gradlew :app:bootRun
+./gradlew :notification-app:bootRun --args='--spring.profiles.active=service,ev-worker,wf-worker'
 ```
 
 Verify the application started successfully:

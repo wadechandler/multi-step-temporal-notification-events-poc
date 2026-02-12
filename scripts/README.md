@@ -65,6 +65,30 @@ This will:
 2. Print the workflow ID to look for in Temporal UI
 3. Provide next steps
 
+### `build-and-load.sh` — Build Docker Image + Load into KIND
+
+Builds the multi-module Docker image from the project root and loads it into the KIND cluster.
+Used before `helm install` to deploy the app into Kubernetes.
+
+```bash
+# Build and load with default name (notification-poc:latest)
+./scripts/build-and-load.sh
+
+# Custom image name and tag
+./scripts/build-and-load.sh my-image v1.2.3
+```
+
+After loading, deploy with:
+```bash
+helm install notification-poc charts/notification-poc \
+    -f charts/notification-poc/environments/local-values.yaml \
+    --namespace default --wait --timeout 300s
+
+# Verify all 5 pods are running (service, ev-worker, wf-worker,
+# contact-wf-worker, message-wf-worker)
+kubectl get pods | grep notification
+```
+
 ### `port-forward.sh` — Port Forward Helper
 
 Sets up `kubectl port-forward` for Temporal gRPC (required for the local app to connect to Temporal in the cluster).
@@ -96,8 +120,8 @@ export KAFKA_BOOTSTRAP_SERVERS=localhost:30092
 export TEMPORAL_ADDRESS=localhost:7233
 export BUSINESS_DB_PASSWORD=$(kubectl get secret business-db-app -n default -o jsonpath='{.data.password}' | base64 -d)
 
-# 3. Start the app
-./gradlew :app:bootRun
+# 3. Start the app (all profiles for local dev)
+./gradlew :notification-app:bootRun --args='--spring.profiles.active=service,ev-worker,wf-worker'
 
 # 4. (In another terminal) Run a quick test
 ./scripts/quick-test.sh
@@ -118,7 +142,7 @@ export BUSINESS_DB_PASSWORD=$(kubectl get secret business-db-app -n default -o j
 
 - Docker running
 - `kind`, `kubectl`, `helm` installed
-- Java 25+ (for `./gradlew :app:bootRun`)
+- Java 25+ (for `./gradlew :notification-app:bootRun`)
 - `curl` (for test scripts)
 - `jq` (optional, for JSON parsing in verbose mode)
 
@@ -144,5 +168,6 @@ export BUSINESS_DB_PASSWORD=$(kubectl get secret business-db-app -n default -o j
 
 ### Port conflicts
 - If ports 30080-30093, 7233, or 8080 are already in use, you'll get bind errors.
-- See [Task 09](../docs/tasks/09-onboarding-and-port-config.md) for planned port configurability.
+- For Kubernetes deployments, ports are configured via Helm values
+  (`charts/notification-poc/values.yaml`) and KIND port mappings (`infra/kind-config.yaml`).
 - Workaround: stop the conflicting process, or modify the port in the relevant config files.

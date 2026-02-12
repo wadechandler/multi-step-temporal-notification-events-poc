@@ -1,0 +1,29 @@
+{{- if .Values.evWorker.scaling.enabled }}
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: notification-ev-worker
+  labels:
+    {{- include "notification-poc.labels" (dict "name" "notification-ev-worker" "context" $) | nindent 4 }}
+spec:
+  scaleTargetRef:
+    name: notification-ev-worker
+  minReplicaCount: {{ .Values.evWorker.scaling.minReplicas | default 1 }}
+  maxReplicaCount: {{ .Values.evWorker.scaling.maxReplicas | default 5 }}
+  cooldownPeriod: {{ .Values.evWorker.scaling.cooldownPeriod | default 60 }}
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleDown:
+          stabilizationWindowSeconds: {{ .Values.evWorker.scaling.scaleDownStabilization | default 120 }}
+  triggers:
+    {{- include "notification-poc.baseTriggers" .Values.evWorker.scaling | nindent 4 }}
+    {{- if .Values.evWorker.scaling.kafka.enabled }}
+    - type: kafka
+      metadata:
+        bootstrapServers: {{ .Values.kafka.bootstrapServers | quote }}
+        consumerGroup: {{ .Values.evWorker.kafka.consumerGroup | quote }}
+        topic: {{ .Values.evWorker.scaling.kafka.topic | quote }}
+        lagThreshold: {{ .Values.evWorker.scaling.kafka.lagThreshold | quote }}
+    {{- end }}
+{{- end }}

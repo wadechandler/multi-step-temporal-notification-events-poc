@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification-message-wf-worker
+  labels:
+    {{- include "notification-poc.labels" (dict "name" "notification-message-wf-worker" "context" $) | nindent 4 }}
+spec:
+  replicas: {{ .Values.messageWfWorker.replicas | default 1 }}
+  selector:
+    matchLabels:
+      {{- include "notification-poc.selectorLabels" (dict "name" "notification-message-wf-worker") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "notification-poc.selectorLabels" (dict "name" "notification-message-wf-worker") | nindent 8 }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/actuator/prometheus"
+    spec:
+      containers:
+        - name: notification-message-wf-worker
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy | default "IfNotPresent" }}
+          ports:
+            - containerPort: 8080
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: "message-wf-worker"
+          envFrom:
+            - configMapRef:
+                name: notification-message-wf-worker-config
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: {{ .Values.messageWfWorker.probes.liveness.initialDelaySeconds | default 20 }}
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8080
+            initialDelaySeconds: {{ .Values.messageWfWorker.probes.readiness.initialDelaySeconds | default 10 }}
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: {{ .Values.messageWfWorker.resources.requests.cpu | default "250m" }}
+              memory: {{ .Values.messageWfWorker.resources.requests.memory | default "384Mi" }}
+            limits:
+              cpu: {{ .Values.messageWfWorker.resources.limits.cpu | default "500m" }}
+              memory: {{ .Values.messageWfWorker.resources.limits.memory | default "768Mi" }}

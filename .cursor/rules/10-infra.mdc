@@ -11,11 +11,12 @@ globs: infra/**
 - Cluster name: `notification-poc`.
 
 ## Operators & Helm Charts
-- **Strimzi:** Latest stable for Kafka 4.x with KRaft mode (no ZooKeeper).
+- **Strimzi:** Pinned to Helm chart 0.50.0 for Kafka 4.1.1 with KRaft mode (no ZooKeeper).
 - **CNPG (CloudNativePG):** Latest stable operator. Define clusters via `Cluster` CRDs.
 - **YugabyteDB:** Yugabyte Platform operator or direct StatefulSet deployment.
 - **Temporal:** Helm chart version 0.73.1 (stable). Configure with Postgres-based persistence and Advanced Visibility (no Elasticsearch).
 - **Prometheus + Grafana:** kube-prometheus-stack Helm chart for metrics collection.
+- **KEDA:** Pinned to Helm chart 2.19.0 (`kedacore/keda`). Event-driven autoscaling for all deployments.
 
 ## Database Toggle Pattern
 The `infra/scripts/setup.sh` script accepts a `--db` flag:
@@ -24,8 +25,27 @@ The `infra/scripts/setup.sh` script accepts a `--db` flag:
 Both modes create the same logical databases: `temporal`, `temporal_visibility`, `business`.
 CNPG cluster names use hyphens (`temporal-db`, `business-db`); database names inside use underscores.
 
+## KEDA (Kubernetes Event-Driven Autoscaling)
+- Installed via Helm: `kedacore/keda` in `keda` namespace.
+- Used for all autoscaling: Temporal queue backlog, Kafka consumer lag, Prometheus metrics.
+- Each deployment gets a `ScaledObject` with cpu + memory baseline triggers plus
+  application-specific triggers.
+- Do NOT create separate HPA objects — KEDA manages HPAs internally.
+- KEDA CRDs: `scaledobjects.keda.sh`, `scaledjobs.keda.sh`, `triggerauthentications.keda.sh`.
+
+## Kafka Share Groups (KIP-932 Preview)
+- Enabled on the Kafka 4.1.1 cluster via `kafka-features.sh upgrade --feature share.version=1`.
+- Allows queue-like consumption where the broker distributes individual records across consumers.
+- Application feature flag (`kafka.consumer-mode`) controls whether a consumer uses
+  traditional consumer groups or share groups (see Task 13).
+- Preview only — not for production. Upgrade implications documented in `setup.sh` comments.
+- Reversible: `kafka-features.sh downgrade --feature share.version=0`.
+- Requires ALL brokers to be Kafka 4.1+. Kafka 4.0 early access is incompatible with 4.1 preview.
+
 ## Scripts
-- `infra/scripts/setup.sh` — Full cluster bootstrap (idempotent).
+- `infra/scripts/setup.sh` — Full cluster bootstrap (idempotent). Installs: KIND, cert-manager,
+  Strimzi/Kafka 4.1.1, CNPG/Yugabyte, Temporal, Prometheus/Grafana, KEDA. Enables share groups.
 - `infra/scripts/teardown.sh` — Destroy the KIND cluster.
-- `infra/scripts/verify.sh` — Verify all infrastructure components are healthy.
+- `infra/scripts/verify.sh` — Verify all infrastructure components are healthy (includes KEDA,
+  Kafka version, and share groups checks).
 - All scripts must be POSIX-compatible bash. Use `set -euo pipefail`.

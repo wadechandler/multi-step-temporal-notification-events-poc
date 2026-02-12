@@ -1,0 +1,28 @@
+{{- if .Values.service.scaling.enabled }}
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: notification-service
+  labels:
+    {{- include "notification-poc.labels" (dict "name" "notification-service" "context" $) | nindent 4 }}
+spec:
+  scaleTargetRef:
+    name: notification-service
+  minReplicaCount: {{ .Values.service.scaling.minReplicas | default 1 }}
+  maxReplicaCount: {{ .Values.service.scaling.maxReplicas | default 5 }}
+  cooldownPeriod: {{ .Values.service.scaling.cooldownPeriod | default 90 }}
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleDown:
+          stabilizationWindowSeconds: {{ .Values.service.scaling.scaleDownStabilization | default 180 }}
+  triggers:
+    {{- include "notification-poc.baseTriggers" .Values.service.scaling | nindent 4 }}
+    {{- if .Values.service.scaling.prometheus.enabled }}
+    - type: prometheus
+      metadata:
+        serverAddress: {{ .Values.prometheus.serverAddress | quote }}
+        query: {{ tpl .Values.service.scaling.prometheus.query . | quote }}
+        threshold: {{ .Values.service.scaling.prometheus.threshold | quote }}
+    {{- end }}
+{{- end }}

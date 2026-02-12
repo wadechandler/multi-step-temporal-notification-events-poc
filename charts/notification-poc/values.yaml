@@ -1,0 +1,200 @@
+image:
+  repository: notification-poc
+  tag: latest
+  pullPolicy: IfNotPresent
+
+# --- Infrastructure Endpoints (declared once, referenced by templates) ---
+kafka:
+  bootstrapServers: "poc-kafka-kafka-bootstrap.kafka:9092"
+
+database:
+  host: "business-db-rw.default"
+  port: "5432"
+  name: "business"
+  user: "app"
+  secretName: "business-db-app"
+
+temporal:
+  address: "temporal-frontend.temporal:7233"
+  taskQueue: "NOTIFICATION_QUEUE"
+  contactActivityQueue: "CONTACT_ACTIVITY_QUEUE"
+  messageActivityQueue: "MESSAGE_ACTIVITY_QUEUE"
+  namespace: "default"
+
+prometheus:
+  serverAddress: "http://kube-prometheus-kube-prome-prometheus.monitoring:9090"
+
+# --- Service ---
+service:
+  replicas: 1
+  kafka:
+    consumerGroup: "notification-poc-service"
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "512Mi"
+    limits:
+      cpu: "1000m"
+      memory: "1Gi"
+  probes:
+    liveness:
+      initialDelaySeconds: 30
+    readiness:
+      initialDelaySeconds: 15
+  scaling:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 5
+    cooldownPeriod: 90
+    scaleDownStabilization: 180
+    cpu:
+      enabled: true
+      targetUtilization: "70"
+    memory:
+      enabled: true
+      targetUtilization: "80"
+    prometheus:
+      enabled: true
+      # Use {{ .Release.Namespace }} so the query tracks the actual deploy namespace.
+      # Evaluated via tpl in the template.
+      query: |
+        histogram_quantile(0.90,
+          sum(rate(http_server_requests_seconds_bucket{
+            namespace="{{ .Release.Namespace }}",
+            app="{{ include "notification-poc.serviceName" . }}"
+          }[2m])) by (le))
+      threshold: "0.03"
+
+# --- Event Worker ---
+evWorker:
+  replicas: 1
+  kafka:
+    consumerMode: "consumer-group"
+    consumerGroup: "notification-workflow-starter"
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "384Mi"
+    limits:
+      cpu: "500m"
+      memory: "768Mi"
+  probes:
+    liveness:
+      initialDelaySeconds: 20
+    readiness:
+      initialDelaySeconds: 10
+  scaling:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 5
+    cooldownPeriod: 60
+    scaleDownStabilization: 120
+    cpu:
+      enabled: true
+      targetUtilization: "60"
+    memory:
+      enabled: true
+      targetUtilization: "75"
+    kafka:
+      enabled: true
+      topic: "notification-events"
+      lagThreshold: "10"
+
+# --- Workflow Worker ---
+wfWorker:
+  replicas: 1
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "384Mi"
+    limits:
+      cpu: "500m"
+      memory: "768Mi"
+  probes:
+    liveness:
+      initialDelaySeconds: 20
+    readiness:
+      initialDelaySeconds: 10
+  scaling:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 8
+    cooldownPeriod: 60
+    scaleDownStabilization: 120
+    cpu:
+      enabled: true
+      targetUtilization: "60"
+    memory:
+      enabled: true
+      targetUtilization: "75"
+    temporal:
+      enabled: true
+      targetQueueSize: "5"
+      queueTypes: "workflow"
+      unsafeSsl: "true"
+
+# --- Contact Activity Worker ---
+contactWfWorker:
+  replicas: 1
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "384Mi"
+    limits:
+      cpu: "500m"
+      memory: "768Mi"
+  probes:
+    liveness:
+      initialDelaySeconds: 20
+    readiness:
+      initialDelaySeconds: 10
+  scaling:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 6
+    cooldownPeriod: 60
+    scaleDownStabilization: 120
+    cpu:
+      enabled: true
+      targetUtilization: "60"
+    memory:
+      enabled: true
+      targetUtilization: "75"
+    temporal:
+      enabled: true
+      targetQueueSize: "3"
+      queueTypes: "activity"
+      unsafeSsl: "true"
+
+# --- Message Activity Worker ---
+messageWfWorker:
+  replicas: 1
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "384Mi"
+    limits:
+      cpu: "500m"
+      memory: "768Mi"
+  probes:
+    liveness:
+      initialDelaySeconds: 20
+    readiness:
+      initialDelaySeconds: 10
+  scaling:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 4
+    cooldownPeriod: 60
+    scaleDownStabilization: 120
+    cpu:
+      enabled: true
+      targetUtilization: "60"
+    memory:
+      enabled: true
+      targetUtilization: "75"
+    temporal:
+      enabled: true
+      targetQueueSize: "5"
+      queueTypes: "activity"
+      unsafeSsl: "true"

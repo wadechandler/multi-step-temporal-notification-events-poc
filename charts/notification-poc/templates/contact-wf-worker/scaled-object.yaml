@@ -1,0 +1,31 @@
+{{- if .Values.contactWfWorker.scaling.enabled }}
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: notification-contact-wf-worker
+  labels:
+    {{- include "notification-poc.labels" (dict "name" "notification-contact-wf-worker" "context" $) | nindent 4 }}
+spec:
+  scaleTargetRef:
+    name: notification-contact-wf-worker
+  minReplicaCount: {{ .Values.contactWfWorker.scaling.minReplicas | default 1 }}
+  maxReplicaCount: {{ .Values.contactWfWorker.scaling.maxReplicas | default 6 }}
+  cooldownPeriod: {{ .Values.contactWfWorker.scaling.cooldownPeriod | default 60 }}
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleDown:
+          stabilizationWindowSeconds: {{ .Values.contactWfWorker.scaling.scaleDownStabilization | default 120 }}
+  triggers:
+    {{- include "notification-poc.baseTriggers" .Values.contactWfWorker.scaling | nindent 4 }}
+    {{- if .Values.contactWfWorker.scaling.temporal.enabled }}
+    - type: temporal
+      metadata:
+        endpoint: {{ .Values.temporal.address | quote }}
+        namespace: {{ .Values.temporal.namespace | default "default" | quote }}
+        taskQueue: {{ .Values.temporal.contactActivityQueue | quote }}
+        targetQueueSize: {{ .Values.contactWfWorker.scaling.temporal.targetQueueSize | quote }}
+        queueTypes: {{ .Values.contactWfWorker.scaling.temporal.queueTypes | default "activity" | quote }}
+        unsafeSsl: {{ .Values.contactWfWorker.scaling.temporal.unsafeSsl | default "true" | quote }}
+    {{- end }}
+{{- end }}

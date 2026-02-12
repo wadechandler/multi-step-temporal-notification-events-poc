@@ -11,8 +11,10 @@
 #   3. Database connectivity (temporal, temporal_visibility, business)
 #   4. Temporal frontend responds on gRPC port
 #   5. Temporal UI is accessible
-#   6. Kafka topics exist
-#   7. Prints connection info summary
+#   6. Kafka (version, share groups, topics)
+#   7. Monitoring (Prometheus + Grafana)
+#   8. KEDA operator
+#   Connection info summary
 # =============================================================================
 set -euo pipefail
 
@@ -282,6 +284,34 @@ else
         fail "Kafka cluster 'poc-kafka' is not Ready (status: ${KAFKA_STATUS})"
     fi
 
+    # Check Kafka version via Strimzi CR status (authoritative source)
+    KAFKA_VERSION=$(kubectl get kafka poc-kafka -n kafka \
+        -o jsonpath='{.status.kafkaVersion}' 2>/dev/null || echo "")
+    if [[ -z "${KAFKA_VERSION}" ]]; then
+        # Fallback: read from the spec if status isn't populated yet
+        KAFKA_VERSION=$(kubectl get kafka poc-kafka -n kafka \
+            -o jsonpath='{.spec.kafka.version}' 2>/dev/null || echo "")
+    fi
+    if [[ -n "${KAFKA_VERSION}" ]]; then
+        if [[ "${KAFKA_VERSION}" =~ ^4\.1\. ]]; then
+            pass "Kafka version: ${KAFKA_VERSION}"
+        else
+            fail "Expected Kafka 4.1.x but got: ${KAFKA_VERSION}"
+        fi
+    else
+        fail "Could not determine Kafka version from Strimzi CR"
+    fi
+
+    # Check share groups feature (KIP-932)
+    SHARE_GROUPS=$(kubectl exec -n kafka "${KAFKA_POD}" -- \
+        /opt/kafka/bin/kafka-features.sh \
+        --bootstrap-server localhost:9092 describe 2>/dev/null || echo "")
+    if echo "${SHARE_GROUPS}" | grep -q "share.version.*1"; then
+        pass "Kafka share groups enabled (share.version=1)"
+    else
+        fail "Kafka share groups NOT enabled (expected share.version=1)"
+    fi
+
     # Check each expected topic
     EXPECTED_TOPICS="notification-events contact-commands contact-events message-commands message-events"
     for TOPIC in ${EXPECTED_TOPICS}; do
@@ -321,6 +351,43 @@ if command -v curl &>/dev/null; then
     else
         fail "Grafana UI is NOT accessible at http://localhost:30081"
     fi
+fi
+
+# ---------------------------------------------------------------------------
+# Check 8: KEDA Operator
+# ---------------------------------------------------------------------------
+section "Check 8: KEDA (Event-Driven Autoscaling)"
+
+KEDA_POD=$(kubectl get pods -n keda -l app=keda-operator --no-headers -o custom-columns=":metadata.name" 2>/dev/null | head -1)
+if [[ -n "${KEDA_POD}" ]]; then
+    KEDA_STATUS=$(kubectl get pod "${KEDA_POD}" -n keda -o jsonpath='{.status.phase}' 2>/dev/null)
+    if [[ "${KEDA_STATUS}" == "Running" ]]; then
+        pass "KEDA operator pod is Running (${KEDA_POD})"
+    else
+        fail "KEDA operator pod status: ${KEDA_STATUS}"
+    fi
+else
+    fail "No KEDA operator pod found"
+fi
+
+# Check KEDA metrics API server
+KEDA_METRICS_POD=$(kubectl get pods -n keda -l app=keda-operator-metrics-apiserver --no-headers -o custom-columns=":metadata.name" 2>/dev/null | head -1)
+if [[ -n "${KEDA_METRICS_POD}" ]]; then
+    KEDA_METRICS_STATUS=$(kubectl get pod "${KEDA_METRICS_POD}" -n keda -o jsonpath='{.status.phase}' 2>/dev/null)
+    if [[ "${KEDA_METRICS_STATUS}" == "Running" ]]; then
+        pass "KEDA metrics API server is Running"
+    else
+        fail "KEDA metrics API server status: ${KEDA_METRICS_STATUS}"
+    fi
+else
+    skip "KEDA metrics API server pod not found (may use different labels)"
+fi
+
+# Check KEDA CRDs are installed
+if kubectl get crd scaledobjects.keda.sh &>/dev/null; then
+    pass "KEDA ScaledObject CRD is installed"
+else
+    fail "KEDA ScaledObject CRD not found"
 fi
 
 # ---------------------------------------------------------------------------

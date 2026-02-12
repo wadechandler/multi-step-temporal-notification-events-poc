@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: notification-service-config
+  labels:
+    {{- include "notification-poc.labels" (dict "name" "notification-service" "context" $) | nindent 4 }}
+data:
+  KAFKA_BOOTSTRAP_SERVERS: {{ .Values.kafka.bootstrapServers | quote }}
+  KAFKA_CONSUMER_GROUP_ID: {{ .Values.service.kafka.consumerGroup | quote }}
+  DB_HOST: {{ .Values.database.host | quote }}
+  DB_PORT: {{ .Values.database.port | quote }}
+  DB_NAME: {{ .Values.database.name | quote }}
+  DB_USER: {{ .Values.database.user | quote }}
+  SERVICES_BASE_URL: {{ include "notification-poc.serviceUrl" . | quote }}

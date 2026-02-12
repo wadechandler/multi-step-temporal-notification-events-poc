@@ -1,12 +1,62 @@
 ---
 description: Temporal workflow and activity patterns for the notification processing saga
-globs: app/src/**/*.java
+globs: notification-app/src/**/*.java
 ---
 
 # Temporal Workflow Standards
 
-## Task Queue
-- Name: `NOTIFICATION_QUEUE`
+## Task Queues
+
+Activities run on **separate task queues** from the workflow orchestration:
+
+| Queue | Purpose | Workers | I/O |
+|-------|---------|---------|-----|
+| `NOTIFICATION_QUEUE` | Workflow orchestration (scheduling decisions) | `wf-worker`, `wf-worker-orchestrator` | None — pure in-memory replay |
+| `CONTACT_ACTIVITY_QUEUE` | Contact resolution (getContact, createContact, pollForContact) | `wf-worker`, `contact-wf-worker` | HTTP calls to Contact service |
+| `MESSAGE_ACTIVITY_QUEUE` | Message creation (bundling + createMessage) | `wf-worker`, `message-wf-worker` | HTTP calls to Message service |
+
+Constants are in `notification-common/.../config/TaskQueues.java`.
+
+### Per-Activity Task Queue Routing
+
+Activity stubs use `ActivityOptions.setTaskQueue()` to route tasks to their queue.
+The workflow itself always runs on `NOTIFICATION_QUEUE`:
+
+```java
+// Contact activities → CONTACT_ACTIVITY_QUEUE
+private final ContactActivities contactActivities = Workflow.newActivityStub(
+        ContactActivities.class,
+        ActivityOptions.newBuilder()
+                .setTaskQueue(TaskQueues.CONTACT_ACTIVITY_QUEUE)
+                .setStartToCloseTimeout(Duration.ofSeconds(30))
+                .build());
+
+// Message activities → MESSAGE_ACTIVITY_QUEUE
+private final MessageActivities messageActivities = Workflow.newActivityStub(
+        MessageActivities.class,
+        ActivityOptions.newBuilder()
+                .setTaskQueue(TaskQueues.MESSAGE_ACTIVITY_QUEUE)
+                .setStartToCloseTimeout(Duration.ofSeconds(30))
+                .build());
+```
+
+## Deployment Modes
+
+### Kubernetes (split mode — default)
+The Helm chart always deploys 3 wf-worker types:
+
+| Deployment | Profile | Queue(s) |
+|-----------|---------|----------|
+| `notification-wf-worker` | `wf-worker-orchestrator` | `NOTIFICATION_QUEUE` (workflow only) |
+| `notification-contact-wf-worker` | `contact-wf-worker` | `CONTACT_ACTIVITY_QUEUE` (activities only) |
+| `notification-message-wf-worker` | `message-wf-worker` | `MESSAGE_ACTIVITY_QUEUE` (activities only) |
+
+Each gets its own KEDA ScaledObject targeting its specific queue.
+
+### Local dev (combined mode)
+Run with `--spring.profiles.active=service,ev-worker,wf-worker`.
+The `wf-worker` profile registers all 3 workers in a single JVM (one per queue).
+Backward compatible — same command as before the split.
 
 ## Workflow: NotificationWorkflow
 Entry point for processing a single notification event. Receives typed input:
@@ -17,26 +67,43 @@ before starting the workflow. The workflow receives pre-parsed, typed data — i
 raw JSON or untyped maps.
 
 ### Steps (Saga):
-1. **For Each Contact** in `payload.contacts()` (may be 1 or more per event):
+1. **Phase 1: Resolve all contacts** (parallel, on `CONTACT_ACTIVITY_QUEUE`):
    a. **GetContact(externalIdType, externalIdValue):** Activity that calls `GET /contacts?externalIdType={type}&externalIdValue={value}`.
       - Returns `Optional<ContactResult>`. A 404 returns `Optional.empty()` — this is a normal result, not an error.
    b. **If empty (contact not found):**
       - **CreateContact(contactData):** Activity that calls `POST /contacts`. Expects `202 Accepted`.
       - **PollForContact(externalIdType, externalIdValue):** Same HTTP call, but this activity stub is configured with aggressive RetryOptions. Throws `ContactNotFoundException` on 404 (retryable), returns `ContactResult` on success.
-   c. **CreateMessage(contactId, templateId, eventType):** Activity that calls `POST /messages`.
-      - Expects `202 Accepted`.
+2. **Phase 2: Bundle and create messages** (on `MESSAGE_ACTIVITY_QUEUE`):
+   - Group resolved contacts by unique email to avoid duplicate messages.
+   - Create one message per unique email endpoint (primary contact from each group).
+   - Handle no-email contacts separately (phone-only fallback).
+   - **CreateMessage(contactId, templateId, eventType):** Activity that calls `POST /messages`. Expects `202 Accepted`.
 
 ### Temporal Patterns to Use:
 - **Activity RetryOptions on stubs:** Retry options are configured on the **ActivityStub** in the workflow, NOT in the activity implementation. Use different stubs for different retry policies (standard vs polling).
+- **`ActivityOptions.setTaskQueue()`:** Routes activity tasks to the correct worker pool. The workflow itself does NOT change queues.
 - **`Async.function()` + `Promise.allOf()`:** For parallel contact processing. Do NOT use child workflows for this POC.
-- **Workflow.sleep():** If you need durable wait between saga steps (NOT Thread.sleep).
+- **`Workflow.sleep()`:** If you need durable wait between saga steps (NOT Thread.sleep).
 - **Saga Compensation:** If message creation fails after contact was created, log it (no rollback needed for this POC, but structure the code to allow it).
 
 ### Activity Implementation:
 - Activities are the ONLY place for I/O (HTTP calls, DB queries, Kafka publishing).
-- Use Virtual Threads for the Activity worker thread pool.
+- Use `WorkerOptions.newBuilder().setUsingVirtualThreadsOnActivityWorker(true)` for all activity workers.
 - Activities should be idempotent where possible.
 - Use specific exception types: `ContactNotFoundException`, `ServiceUnavailableException`, etc.
+- `@Profile` annotations must include both combined and split profiles:
+  - `ContactActivitiesImpl`: `@Profile({"wf-worker", "contact-wf-worker"})`
+  - `MessageActivitiesImpl`: `@Profile({"wf-worker", "message-wf-worker"})`
+
+### Worker Configuration:
+- `TemporalClientConfig` provides `WorkflowServiceStubs` and `WorkflowClient` beans.
+  Active for profiles: `ev-worker`, `wf-worker`, `wf-worker-orchestrator`, `contact-wf-worker`, `message-wf-worker`.
+- `TemporalWorkerConfig` provides `WorkerFactory` beans gated by profile:
+  - `wf-worker` → combined factory (all 3 workers)
+  - `wf-worker-orchestrator` → workflow-only factory
+  - `contact-wf-worker` → contact activity factory
+  - `message-wf-worker` → message activity factory
+- **Do NOT merge** `TemporalClientConfig` into `TemporalWorkerConfig`.
 
 ### Testing:
 - Use `TestWorkflowEnvironment` for workflow unit tests.

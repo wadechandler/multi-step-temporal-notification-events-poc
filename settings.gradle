@@ -1,3 +1,6 @@
 rootProject.name = 'notification-poc'
 
-include 'app'
+include 'notification-common'
+include 'notification-repository'
+include 'notification-messaging'
+include 'notification-app'

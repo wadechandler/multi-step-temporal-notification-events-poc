@@ -1,0 +1,32 @@
+---
+# Conditional autoconfigure exclusions — only applied when service profile is NOT active.
+# When running combined (local dev), the service profile handles DataSource/JPA/Flyway.
+spring:
+  config:
+    activate:
+      on-profile: "!service"
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration
+      - org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration
+      - org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration
+      - org.springframework.boot.data.jpa.autoconfigure.JpaRepositoriesAutoConfiguration
+
+---
+# Profile: contact-wf-worker
+# Contact resolution activities only. K8s deployment: notification-contact-wf-worker.
+# No DataSource, no Flyway, no Kafka consumer.
+# Web server runs only for actuator health/metrics.
+
+spring:
+  kafka:
+    listener:
+      auto-startup: false
+
+temporal:
+  connection:
+    target: ${TEMPORAL_ADDRESS:localhost:7233}
+
+# Services (base URL for activity HTTP calls — in K8s, targets the service deployment)
+services:
+  base-url: ${SERVICES_BASE_URL:http://notification-service:8080}

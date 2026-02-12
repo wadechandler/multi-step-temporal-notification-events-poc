@@ -13,14 +13,50 @@ globs: *
 ## 2. Tech Stack (Strict - Do Not Deviate)
 - **Language:** Java 25 (via SDKMAN `.sdkmanrc`). Virtual Threads enabled for Temporal Activity workers.
 - **Framework:** Spring Boot 4.0.2 (Spring Framework 7.0.3, Jakarta EE 11).
-- **Build:** Gradle 8.14+ (Groovy DSL). Project uses a Gradle wrapper.
+- **Build:** Gradle 8.14+ (Groovy DSL). Multi-module project with Gradle wrapper.
 - **Workflow Orchestration:** Temporal.io OSS, Java SDK 1.32.1.
 - **Messaging:** Apache Kafka 4.x (deployed via Strimzi Operator on K8s).
 - **Infrastructure:** Kubernetes (KIND for local dev), Helm for deployments.
 - **Schema Migration:** Flyway.
 - **Observability:** OpenTelemetry, Micrometer, Prometheus, Grafana.
 
-## 3. Architecture Pattern: CQRS + Event-Driven + Temporal Saga
+## 3. Multi-Module Structure
+```
+notification-poc/                        (root)
+  notification-common/                   (DTOs, domain models, topic constants)
+  notification-repository/               (JPA entities, repositories, Flyway migrations)
+  notification-messaging/                (Kafka topic NewTopic bean definitions)
+  notification-app/                      (Single boot module — controllers, workflows, workers)
+```
+
+### Module Dependency Graph
+- `notification-common` — No Spring dependencies (Jackson annotations only). Shared by all.
+- `notification-repository` → `notification-common`. JPA, Flyway, PostgreSQL.
+- `notification-messaging` → `notification-common`. Spring Kafka.
+- `notification-app` → `notification-common`, `notification-repository`, `notification-messaging`. Boot module.
+
+### Plugin Strategy
+- **Library modules** (`notification-common`, `notification-repository`, `notification-messaging`): `java-library` plugin.
+- **Boot module** (`notification-app`): `org.springframework.boot` plugin (for bootJar/bootRun).
+- **All subprojects**: `io.spring.dependency-management` via root `build.gradle` for Spring BOM alignment.
+
+## 4. Spring Profile Strategy
+A single Docker image is deployed multiple times with different `SPRING_PROFILES_ACTIVE`:
+
+### Base profiles (local dev — all three together):
+- **`service`**: Controllers, CQRS command handlers, DataSource, JPA, Flyway, Kafka (for command topics).
+- **`ev-worker`**: Kafka event consumer (`NotificationEventConsumer`), Temporal client (to start workflows). No DataSource/Flyway/controllers.
+- **`wf-worker`**: Combined Temporal worker — registers workflow + all activities on their respective task queues in one JVM. No DataSource/Flyway/controllers/Kafka consumer.
+
+### Kubernetes split profiles (one per deployment):
+- **`wf-worker-orchestrator`**: Workflow orchestration only on `NOTIFICATION_QUEUE`. No activities, no I/O — pure scheduling.
+- **`contact-wf-worker`**: Contact resolution activities only on `CONTACT_ACTIVITY_QUEUE`. HTTP calls to Contact service.
+- **`message-wf-worker`**: Message creation activities only on `MESSAGE_ACTIVITY_QUEUE`. HTTP calls to Message service.
+
+**Local development:** Run with `--spring.profiles.active=service,ev-worker,wf-worker` for all components in one process.
+**Kubernetes:** Each deployment uses a single profile. The Helm chart deploys 5 total: service, ev-worker, wf-worker (orchestrator), contact-wf-worker, message-wf-worker.
+
+## 5. Architecture Pattern: CQRS + Event-Driven + Temporal Saga
 The system strictly separates Commands (writes via Kafka events) from Queries (reads from DB).
 
 ### Command Path (Asynchronous):
@@ -39,7 +75,7 @@ The system strictly separates Commands (writes via Kafka events) from Queries (r
 - A Kafka consumer reads from the `notification-events` topic, inspects `eventType` (via Kafka header or message body) to determine which workflow to invoke, parses the payload into a typed DTO, and starts the appropriate Temporal Workflow.
 - For `RxOrderNotification` events: the Workflow coordinates Contact Lookup -> Contact Creation (if needed) -> Poll for Consistency -> Message Creation.
 
-## 4. Database Strategy (Toggleable)
+## 6. Database Strategy (Toggleable)
 Support two persistence modes. In a given deployment, Temporal and the App share the same DB technology:
 - **Mode A (Default):** CloudNativePG (CNPG) - standard PostgreSQL on K8s.
 - **Mode B:** YugabyteDB OSS - distributed PostgreSQL-compatible on K8s.
@@ -47,7 +83,7 @@ Support two persistence modes. In a given deployment, Temporal and the App share
 - **Visibility:** Use Postgres-based Advanced Visibility for Temporal (no Elasticsearch needed).
 - **DataGrip Access:** DB services must be exposed via NodePort for local DataGrip connectivity.
 
-## 5. Coding Standards
+## 7. Coding Standards
 - **Lombok:** Allowed for DTOs and models.
 - **JSON:** Jackson (v3.0.4 ships with Spring Boot 4.0.2).
 - **Null Safety:** Use JSpecify annotations where practical.
@@ -59,14 +95,17 @@ Support two persistence modes. In a given deployment, Temporal and the App share
   - Use Activity `RetryOptions` for polling patterns (e.g., waiting for eventual consistency).
   - Use Virtual Threads for Activity thread pools to maximize I/O concurrency.
 
-## 6. Kafka Topics
+## 8. Kafka Topics
 - `notification-events` — External events that trigger workflows.
 - `contact-commands` — ContactCreateRequested commands.
 - `contact-events` — ContactCreated fact events.
 - `message-commands` — MessageCreateRequested commands.
 - `message-events` — MessageCreated fact events.
 
-## 7. Domain Model (Generic - No Company IP)
+Topic name constants live in `notification-common` → `com.wadechandler.notification.poc.config.KafkaTopics`.
+Topic `NewTopic` bean definitions live in `notification-messaging` → `com.wadechandler.notification.poc.messaging.KafkaTopicConfig`.
+
+## 9. Domain Model (Generic - No Company IP)
 - **ExternalEvent:** `{ eventId: UUID, eventType: String, payload: Object }` — Trigger from upstream.
 - **Contact:** `{ id: UUID, externalIds: Map<String,String>, email: String, phone: String, status: String }` — A reachable person.
 - **Message:** `{ id: UUID, contactId: UUID, templateId: String, channel: String, content: String, status: String }` — A composed communication.

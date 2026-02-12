@@ -1,0 +1,33 @@
+spring:
+  application:
+    name: notification-poc
+
+  # Kafka (shared bootstrap for all profiles that use Kafka)
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:30092}
+    consumer:
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+  # Virtual Threads (enabled by default in SB4, explicitly set for clarity)
+  threads:
+    virtual:
+      enabled: true
+
+# Server
+server:
+  port: ${SERVER_PORT:8080}
+
+# Actuator (shared across all profiles — health/metrics always available)
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  metrics:
+    export:
+      prometheus:
+        enabled: true
